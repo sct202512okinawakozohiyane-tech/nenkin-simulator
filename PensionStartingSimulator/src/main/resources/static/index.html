@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Pension Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h2>年金シミュレーター</h2>
+
+<div style="border:1px solid #ccc; padding:15px; margin-bottom:20px; background:#f9f9f9;">
+  <b>試算前提</b><br>
+  ・給与：入力金額の80%を手取りとして試算<br>
+  ・公的年金：入力金額の90%を手取りとして試算<br>
+  ・公的年金：物価増に対しマクロ経済スライドによる調整（インフレ率☓0.8）を適用<br>
+  ・DC取り崩し：受取額の90%を手取りとして試算
+</div>
+
+<div>
+	<label>シミュレーション開始年齢</label>
+	<input type="number" id="startAge" value="60"> （歳）
+	<div style="font-size:12px; color:gray;">
+	※60歳以降で設定
+	</div>
+	
+	<label>想定寿命</label>
+	<input type="number" id="lifeExpectancy" value="90"> （歳）
+	<div style="font-size:12px; color:gray;">
+	※80〜105推奨
+	</div>
+	<br>
+	
+    <label>退職年齢:
+        <input type="number" id="retirementAge" value="65"> （歳）
+    </label><br>
+
+    <label>年金開始年齢</label>
+	<input type="number" id="pensionStartAge" value="65">（歳）
+	<div style="font-size:12px; color:gray;">
+	※60〜75で設定
+	</div><br>
+
+    <label>生活費(月):
+        <input type="text" id="basicLivingCost" value="200" onblur="formatNumber(this)"> （千円）
+    </label><br>
+
+    <label>娯楽費(月):
+        <input type="text" id="leisureCost" value="100" onblur="formatNumber(this)"> （千円）
+    </label><br>
+    <label>インフレ率:
+        <input type="number" step="0.01" id="inflationRate" value="0.02">
+        （例: 0.02 = 2%）
+    </label><br><br>
+    
+	<label>60歳以降の給与（月）</label>
+	<input type="number" id="salaryAfter60" value="300"> （千円）
+	<div style="font-size:12px; color:gray;">
+	※設定金額の80％を手取額として試算
+	</div>
+
+	<label>公的年金（月）</label>
+	<input type="number" id="publicPension" value="250"> （千円）
+	<div style="font-size:12px; color:gray;">
+	※年金開始時の金額を入力<br>
+	※設定金額の90％を手取額として試算<br>
+	※物価増に対しマクロ経済スライドによる調整（インフレ率☓0.8）を適用
+	</div><br>
+
+	<label>DC残高</label>
+	<input type="number" id="dcBalance" value="20000"> （千円）
+	<div style="font-size:12px; color:gray;">
+	※取り崩し時は90％を手取りとして試算
+	</div>
+    
+	<label>想定利回り（年率）:
+	<input type="number" id="dcReturnRate" value="0.05" step="0.01">
+	（例: 0.05 = 5%）
+	</label><br><br>
+
+    <button onclick="runSimulation()">シミュレーション実行</button>
+    <div id="assetLife" style="font-size:24px; margin-top:20px; font-weight:bold;"></div>
+</div>
+
+<hr>
+
+<canvas id="balanceChart" width="900" height="450"></canvas>
+
+<hr>
+<h3>シミュレーション結果（詳細）</h3>
+<div id="resultTable"></div>
+
+<script>
+
+let chart;
+
+async function runSimulation() {
+
+	const requestData = {
+			startAge: Number(document.getElementById('startAge').value),
+			lifeExpectancy: Number(document.getElementById('lifeExpectancy').value),
+			retirementAge: Number(document.getElementById('retirementAge').value),
+		    pensionStartAge: Number(document.getElementById('pensionStartAge').value),
+		    basicLivingCost: removeComma(document.getElementById('basicLivingCost').value),
+		    leisureCost: removeComma(document.getElementById('leisureCost').value),
+		    salaryAfter60: removeComma(document.getElementById('salaryAfter60').value),
+		    publicPension: removeComma(document.getElementById('publicPension').value),
+		    dcBalance: removeComma(document.getElementById('dcBalance').value),
+		    inflationRate: Number(document.getElementById('inflationRate').value),
+		    dcReturnRate: Number(document.getElementById('dcReturnRate').value)  // ← 追加
+		};
+
+    const response = await fetch('/api/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData)
+    });
+
+    const data = await response.json();
+    const assetLifeDiv = document.getElementById("assetLife");
+
+    if (data.assetDepletionAge === -1) {
+        assetLifeDiv.innerHTML = "🟢 資産は100歳まで持ちます";
+    } else {
+        assetLifeDiv.innerHTML = "🔴 資産寿命：" + data.assetDepletionAge + "歳";
+    }
+    
+    const ages = data.yearlyResults.map(y => y.age);
+    const balances = data.yearlyResults.map(y => y.balance);
+    const incomes = data.yearlyResults.map(y => y.income);
+    const expenses = data.yearlyResults.map(y => y.expense);
+    
+    const ctx = document.getElementById('balanceChart');
+
+    if (chart) {
+        chart.destroy();
+    }
+
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ages,
+            datasets: [
+
+                {
+                    label: 'DC残高',
+                    data: balances,
+                    borderColor: 'blue',
+                    backgroundColor: 'rgba(0,0,255,0.1)',
+                    borderWidth: 3,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                },
+
+                {
+                    label: '収入',
+                    data: incomes,
+                    borderColor: 'green',
+                    backgroundColor: 'rgba(0,255,0,0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                    yAxisID: 'y'
+                },
+
+                {
+                    label: '支出',
+                    data: expenses,
+                    borderColor: 'red',
+                    backgroundColor: 'rgba(255,0,0,0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                    yAxisID: 'y'
+                }
+            ]
+        },
+
+        options: {
+            responsive: false,
+
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+
+            plugins: {
+                legend: {
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ": " +
+                                context.parsed.y.toLocaleString() + " 千円";
+                        }
+                    }
+                }
+            },
+
+            scales: {
+
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: '年間収支（千円）'
+                    }
+                },
+
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'DC残高（千円）'
+                    }
+                }
+            }
+        }
+    });
+    
+    // 結果テーブルの表示
+    let tableHtml = `
+    	<table border="1" cellpadding="5">
+    	<tr>
+    	<th>年齢</th>
+    	<th>収入</th>
+    	<th>支出</th>
+    	<th>DC残高</th>
+    	</tr>
+    	`;
+
+    	data.yearlyResults.forEach(y => {
+    	    tableHtml += `
+    	    <tr>
+    	        <td>${y.age}</td>
+    	        <td>${y.income.toLocaleString()}</td>
+    	        <td>${y.expense.toLocaleString()}</td>
+    	        <td>${y.balance.toLocaleString()}</td>
+    	    </tr>
+    	    `;
+    	});
+
+    	tableHtml += "</table>";
+
+    	document.getElementById("resultTable").innerHTML = tableHtml;
+}
+
+function formatNumber(input) {
+    let value = input.value.replace(/,/g, '');
+
+    if (value === '') return;
+
+    if (!isNaN(value)) {
+        input.value = Number(value).toLocaleString();
+    }
+}
+
+function removeComma(value) {
+    return Number(value.replace(/,/g, ''));
+}
+</script>
+
+</body>
+</html>
