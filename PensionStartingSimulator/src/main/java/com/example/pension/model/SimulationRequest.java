@@ -15,6 +15,9 @@ public class SimulationRequest {
 
     public double dcBalance;
     public double dcReturnRate;
-    
+       
     public double inflationRate;
+
+    // ★追加：利回りのブレ（標準偏差）
+    public double returnVolatility;
 }

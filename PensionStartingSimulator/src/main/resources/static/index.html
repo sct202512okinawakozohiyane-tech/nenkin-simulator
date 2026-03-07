@@ -9,34 +9,33 @@
 <style>
 
 body{
-    font-family: Arial;
-    margin:40px;
+font-family:Arial;
+margin:40px;
 }
 
 .section{
-    border:1px solid #ccc;
-    padding:15px;
-    margin-bottom:20px;
-    background:#f9f9f9;
+border:1px solid #ccc;
+padding:15px;
+margin-bottom:20px;
+background:#f9f9f9;
 }
 
 .resultBox{
-    font-size:32px;
-    font-weight:bold;
-    margin-top:20px;
+font-size:32px;
+font-weight:bold;
+margin-top:20px;
 }
 
 canvas{
-    max-width:100%;
+max-width:100%;
 }
 
 .sliderValue{
-    font-weight:bold;
-    color:#2c3e50;
+font-weight:bold;
+color:#2c3e50;
 }
 
 </style>
-
 </head>
 
 <body>
@@ -108,20 +107,37 @@ DC残高<br>
 想定利回り<br>
 
 <input type="range"
-       id="dcReturnRate"
-       min="0"
-       max="0.1"
-       step="0.005"
-       value="0.05"
-       oninput="updateSliderValue()">
+id="dcReturnRate"
+min="0"
+max="0.1"
+step="0.005"
+value="0.05"
+oninput="updateSliderValue()">
 
 <span class="sliderValue" id="returnRateLabel">5%</span>
+
+<br><br>
+
+投資リスク（標準偏差）
+
+<input type="range"
+id="returnVolatility"
+min="0"
+max="0.3"
+step="0.01"
+value="0.15"
+oninput="updateVolatilityLabel()">
+
+<span class="sliderValue" id="volatilityLabel">15%</span>
 
 </div>
 
 <button id="simulateBtn" onclick="runSimulation()">シミュレーション実行</button>
 
 <div id="assetLife" class="resultBox"></div>
+
+<div id="failureProbability"
+style="font-size:22px;"></div>
 
 <hr>
 
@@ -138,207 +154,211 @@ let chart;
 
 function updateSliderValue(){
 
-    const val = document.getElementById("dcReturnRate").value;
+const val=document.getElementById("dcReturnRate").value;
 
-    document.getElementById("returnRateLabel")
-    .innerText = (val*100).toFixed(1) + "%";
+document.getElementById("returnRateLabel")
+.innerText=(val*100).toFixed(1)+"%";
+
+}
+
+function updateVolatilityLabel(){
+
+const val=document.getElementById("returnVolatility").value;
+
+document.getElementById("volatilityLabel")
+.innerText=(val*100).toFixed(0)+"%";
 
 }
 
 function formatNumber(input){
 
-    let value = input.value.replace(/,/g,'');
+let value=input.value.replace(/,/g,'');
 
-    if(value === "") return;
+if(value==="")return;
 
-    if(!isNaN(value)){
-        input.value = Number(value).toLocaleString();
-    }
+if(!isNaN(value)){
+input.value=Number(value).toLocaleString();
+}
 
 }
 
 function removeComma(value){
-
-    return Number(value.replace(/,/g,''));
-
+return Number(value.replace(/,/g,''));
 }
 
 async function runSimulation(){
 
-    const button = document.getElementById("simulateBtn");
+const button=document.getElementById("simulateBtn");
+button.innerText="計算中...";
 
-    button.innerText = "計算中...";
+const lifeExpectancy=
+Number(document.getElementById('lifeExpectancy').value);
 
-    const lifeExpectancy =
-    Number(document.getElementById('lifeExpectancy').value);
+const requestData={
 
-    const requestData = {
+startAge:Number(document.getElementById('startAge').value),
+lifeExpectancy:lifeExpectancy,
+retirementAge:Number(document.getElementById('retirementAge').value),
+pensionStartAge:Number(document.getElementById('pensionStartAge').value),
 
-        startAge:Number(document.getElementById('startAge').value),
-        lifeExpectancy:lifeExpectancy,
-        retirementAge:Number(document.getElementById('retirementAge').value),
-        pensionStartAge:Number(document.getElementById('pensionStartAge').value),
+basicLivingCost:removeComma(document.getElementById('basicLivingCost').value),
+leisureCost:removeComma(document.getElementById('leisureCost').value),
 
-        basicLivingCost:removeComma(document.getElementById('basicLivingCost').value),
-        leisureCost:removeComma(document.getElementById('leisureCost').value),
+salaryAfter60:removeComma(document.getElementById('salaryAfter60').value),
+publicPension:removeComma(document.getElementById('publicPension').value),
 
-        salaryAfter60:removeComma(document.getElementById('salaryAfter60').value),
-        publicPension:removeComma(document.getElementById('publicPension').value),
+dcBalance:removeComma(document.getElementById('dcBalance').value),
 
-        dcBalance:removeComma(document.getElementById('dcBalance').value),
+inflationRate:Number(document.getElementById('inflationRate').value),
+dcReturnRate:Number(document.getElementById('dcReturnRate').value),
 
-        inflationRate:Number(document.getElementById('inflationRate').value),
-        dcReturnRate:Number(document.getElementById('dcReturnRate').value)
+returnVolatility:Number(document.getElementById('returnVolatility').value)
 
-    };
+};
 
-    const response = await fetch('/api/simulate',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(requestData)
-    });
+const response=await fetch('/api/simulate',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify(requestData)
+});
 
-    const data = await response.json();
+const data=await response.json();
 
-    button.innerText = "シミュレーション実行";
+button.innerText="シミュレーション実行";
 
-    const assetLifeDiv = document.getElementById("assetLife");
+const assetLifeDiv=document.getElementById("assetLife");
 
-    if(data.assetDepletionAge === -1){
+if(data.assetDepletionAge===-1){
 
-        assetLifeDiv.innerHTML =
-        "🟢 資産は " + lifeExpectancy + " 歳まで持ちます";
+assetLifeDiv.innerHTML=
+"🟢 資産は "+lifeExpectancy+" 歳まで持ちます";
 
-    }else{
+}else{
 
-        assetLifeDiv.innerHTML =
-        "🔴 資産寿命：" + data.assetDepletionAge + "歳";
+assetLifeDiv.innerHTML=
+"🔴 資産寿命："+data.assetDepletionAge+"歳";
 
-    }
+}
 
-    const ages = data.yearlyResults.map(y => y.age);
-    const balances = data.yearlyResults.map(y => y.balance);
-    const incomes = data.yearlyResults.map(y => y.income);
-    const expenses = data.yearlyResults.map(y => y.expense);
+const prob=(data.failureProbability*100).toFixed(1);
 
-    const ctx = document.getElementById('balanceChart');
+document.getElementById("failureProbability")
+.innerHTML="資産破綻確率："+prob+"%";
 
-    if(chart){
-        chart.destroy();
-    }
+const ages=data.yearlyResults.map(y=>y.age);
+const balances=data.yearlyResults.map(y=>y.balance);
+const incomes=data.yearlyResults.map(y=>y.income);
+const expenses=data.yearlyResults.map(y=>y.expense);
 
-    chart = new Chart(ctx,{
+const ctx=document.getElementById('balanceChart');
 
-        type:'line',
+if(chart){
+chart.destroy();
+}
 
-        data:{
-            labels:ages,
-            datasets:[
+chart=new Chart(ctx,{
 
-                {
-                    label:'DC残高',
-                    data:balances,
-                    borderColor:'blue',
-                    borderWidth:3,
-                    tension:0.3,
-                    yAxisID:'y1'
-                },
+type:'line',
 
-                {
-                    label:'収入',
-                    data:incomes,
-                    borderColor:'green',
-                    borderWidth:2,
-                    tension:0.3,
-                    yAxisID:'y'
-                },
+data:{
+labels:ages,
+datasets:[
 
-                {
-                    label:'支出',
-                    data:expenses,
-                    borderColor:'red',
-                    borderWidth:2,
-                    tension:0.3,
-                    yAxisID:'y'
-                }
+{
+label:'DC残高',
+data:balances,
+borderColor:'blue',
+borderWidth:3,
+tension:0.3,
+yAxisID:'y1'
+},
 
-            ]
-        },
+{
+label:'収入',
+data:incomes,
+borderColor:'green',
+borderWidth:2,
+tension:0.3,
+yAxisID:'y'
+},
 
-        options:{
+{
+label:'支出',
+data:expenses,
+borderColor:'red',
+borderWidth:2,
+tension:0.3,
+yAxisID:'y'
+}
 
-            responsive:true,
+]
+},
 
-            interaction:{
-                mode:'index',
-                intersect:false
-            },
+options:{
 
-            plugins:{
-                legend:{
-                    position:'top'
-                }
-            },
+responsive:true,
 
-            scales:{
+interaction:{
+mode:'index',
+intersect:false
+},
 
-                y:{
-                    type:'linear',
-                    position:'left',
-                    title:{
-                        display:true,
-                        text:'年間収支'
-                    }
-                },
+plugins:{
+legend:{position:'top'}
+},
 
-                y1:{
-                    type:'linear',
-                    position:'right',
-                    grid:{
-                        drawOnChartArea:false
-                    },
-                    title:{
-                        display:true,
-                        text:'DC残高'
-                    }
-                }
+scales:{
 
-            }
+y:{
+type:'linear',
+position:'left',
+title:{display:true,text:'年間収支'}
+},
 
-        }
+y1:{
+type:'linear',
+position:'right',
+grid:{drawOnChartArea:false},
+title:{display:true,text:'DC残高'}
+}
 
-    });
+}
 
-    let tableHtml = `
-    <table border="1" cellpadding="5">
-    <tr>
-    <th>年齢</th>
-    <th>収入</th>
-    <th>支出</th>
-    <th>DC残高</th>
-    </tr>
-    `;
+}
 
-    data.yearlyResults.forEach(y=>{
+});
 
-        tableHtml += `
-        <tr>
-        <td>${y.age}</td>
-        <td>${y.income.toLocaleString()}</td>
-        <td>${y.expense.toLocaleString()}</td>
-        <td>${y.balance.toLocaleString()}</td>
-        </tr>
-        `;
+let tableHtml=`
+<table border="1" cellpadding="5">
+<tr>
+<th>年齢</th>
+<th>収入</th>
+<th>支出</th>
+<th>DC残高</th>
+</tr>
+`;
 
-    });
+data.yearlyResults.forEach(y=>{
 
-    tableHtml += "</table>";
+tableHtml+=`
+<tr>
+<td>${y.age}</td>
+<td>${y.income.toLocaleString()}</td>
+<td>${y.expense.toLocaleString()}</td>
+<td>${y.balance.toLocaleString()}</td>
+</tr>
+`;
 
-    document.getElementById("resultTable").innerHTML = tableHtml;
+});
+
+tableHtml+="</table>";
+
+document.getElementById("resultTable").innerHTML=tableHtml;
 
 }
 
 updateSliderValue();
+updateVolatilityLabel();
 
 </script>
 
