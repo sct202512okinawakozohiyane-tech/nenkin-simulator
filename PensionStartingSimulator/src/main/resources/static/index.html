@@ -1,366 +1,854 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>年金資産シミュレーター</title>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <style>
 
-body{
-font-family:Arial;
-margin:40px;
+/* ===== リセット & ベース ===== */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', 'Hiragino Sans', Arial, sans-serif;
+  margin: 0 auto;
+  padding: 24px 16px;
+  background: #f0f2f5;
+  color: #2c3e50;
+  max-width: 960px;
 }
 
-.section{
-border:1px solid #ccc;
-padding:15px;
-margin-bottom:20px;
-background:#f9f9f9;
+h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0 0 20px;
+  color: #1a252f;
 }
 
-.resultBox{
-font-size:32px;
-font-weight:bold;
-margin-top:20px;
+/* ===== セクション ===== */
+.section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
-canvas{
-max-width:100%;
+.section h3 {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  color: #555;
+  border-bottom: 2px solid #e8ecef;
+  padding-bottom: 8px;
 }
 
-.sliderValue{
-font-weight:bold;
-color:#2c3e50;
+/* ===== フォームグリッド ===== */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
 }
+
+.form-item { display: flex; flex-direction: column; gap: 4px; }
+
+.form-item label {
+  font-size: 0.82rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.form-item input[type="number"],
+.form-item input[type="text"] {
+  padding: 8px 10px;
+  border: 1.5px solid #dce1e7;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  color: #2c3e50;
+  width: 100%;
+  transition: border-color 0.2s;
+}
+
+.form-item input:focus { outline: none; border-color: #3498db; }
+.form-item input.input-error { border-color: #e74c3c; background: #fff5f5; }
+.error-msg { font-size: 0.76rem; color: #e74c3c; min-height: 1em; }
+
+/* ===== スライダー ===== */
+.slider-row { display: flex; align-items: center; gap: 12px; }
+.slider-row input[type="range"] { flex: 1; accent-color: #3498db; }
+.slider-val { font-weight: 700; color: #2c3e50; min-width: 3.5em; text-align: right; }
+
+/* ===== 前提ボックス ===== */
+.premise {
+  background: #f7f9fc;
+  border-left: 4px solid #3498db;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.84rem;
+  color: #555;
+  line-height: 1.7;
+}
+
+/* ===== ボタン ===== */
+#simulateBtn {
+  display: block; width: 100%; padding: 14px;
+  font-size: 1.05rem; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  border: none; border-radius: 8px; cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  margin-bottom: 20px;
+}
+#simulateBtn:hover { opacity: 0.9; }
+#simulateBtn:active { transform: scale(0.99); }
+#simulateBtn:disabled { background: #aaa; cursor: not-allowed; }
+
+/* ===== バリデーションエラー ===== */
+#validationError {
+  display: none;
+  background: #fdf0f0; border: 1px solid #e74c3c;
+  color: #c0392b; border-radius: 8px;
+  padding: 12px 16px; margin-bottom: 16px; font-size: 0.9rem;
+}
+
+/* ===== 結果 ===== */
+.result-section {
+  background: #fff; border-radius: 10px; padding: 20px;
+  margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: none;
+}
+.result-main {
+  font-size: 1.8rem; font-weight: 800;
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+}
+.result-sub { font-size: 1rem; color: #666; margin-bottom: 16px; }
+canvas { max-width: 100%; }
+
+/* ===== テーブル ===== */
+.table-wrap { overflow-x: auto; margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th {
+  background: #f0f4f8; padding: 9px 10px; text-align: right;
+  font-weight: 600; color: #555; white-space: nowrap;
+}
+th:first-child { text-align: center; }
+td { padding: 7px 10px; text-align: right; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+td:first-child { text-align: center; font-weight: 600; }
+tr.depleted td { color: #ccc; }
+tr.depletion-row td { color: #e74c3c; font-weight: 700; }
+tr:hover { background: #f7f9fc; }
+
+/* ===== 取り崩し順序ドラッグUI ===== */
+.order-container { margin-top: 4px; }
+.order-label { font-size: 0.82rem; color: #666; font-weight: 600; margin-bottom: 8px; }
+.order-hint { font-size: 0.75rem; color: #999; margin-bottom: 8px; }
+.order-list { display: flex; flex-direction: column; gap: 6px; user-select: none; }
+.order-item {
+  display: flex; align-items: center; gap: 10px;
+  background: #f7f9fc; border: 1.5px solid #dce1e7;
+  border-radius: 8px; padding: 10px 14px; cursor: grab;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.order-item:hover { background: #eef2f7; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+.order-item.dragging { opacity: 0.4; cursor: grabbing; }
+.order-item.drag-over { border-color: #3498db; background: #e8f4fd; }
+.order-rank {
+  font-size: 0.75rem; font-weight: 700;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; flex-shrink: 0;
+}
+.rank-1 { background: #e74c3c; }
+.rank-2 { background: #f39c12; }
+.rank-3 { background: #27ae60; }
+.drag-handle { font-size: 1.1rem; color: #aaa; }
+.order-name { flex: 1; font-size: 0.9rem; font-weight: 600; color: #2c3e50; }
+.tax-badge {
+  font-size: 0.72rem; font-weight: 700; padding: 2px 8px;
+  border-radius: 20px; white-space: nowrap;
+}
+.badge-dc    { background: #e8d5f5; color: #8e44ad; }
+.badge-nisa  { background: #d5f5e3; color: #27ae60; }
+.badge-other { background: #fde8d8; color: #e67e22; }
+
+/* ===== レスポンシブ ===== */
+@media (max-width: 600px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .result-main { font-size: 1.3rem; }
+  h1 { font-size: 1.2rem; }
+}
+
+/* ===== 特別支出 UI ===== */
+.se-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.se-card {
+  background: #fdf8ff;
+  border: 1.5px solid #d5b8e8;
+  border-radius: 8px;
+  padding: 12px 14px;
+  position: relative;
+}
+.se-card:hover { box-shadow: 0 2px 6px rgba(142,68,173,0.12); }
+.se-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.se-card-header select {
+  padding: 6px 10px;
+  border: 1.5px solid #c8a5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #2c3e50;
+  background: #fff;
+  cursor: pointer;
+}
+.se-card-header select:focus { outline: none; border-color: #8e44ad; }
+.se-label-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 6px 10px;
+  border: 1.5px solid #c8a5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #2c3e50;
+}
+.se-label-input:focus { outline: none; border-color: #8e44ad; }
+.se-label-input::placeholder { color: #bbb; }
+.se-del-btn {
+  background: none;
+  border: none;
+  color: #bbb;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: auto;
+  transition: color 0.15s;
+}
+.se-del-btn:hover { color: #e74c3c; }
+.se-row {
+  display: grid;
+  grid-template-columns: auto auto auto auto 1fr;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 0.88rem;
+}
+.se-row label { color: #777; white-space: nowrap; }
+.se-age-input {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1.5px solid #c8a5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+.se-age-input:focus { outline: none; border-color: #8e44ad; }
+.se-amount-input {
+  padding: 6px 10px;
+  border: 1.5px solid #c8a5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  width: 100%;
+}
+.se-amount-input:focus { outline: none; border-color: #8e44ad; }
+.add-se-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 2px dashed #c8a5e0;
+  border-radius: 8px;
+  padding: 9px 16px;
+  color: #8e44ad;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.add-se-btn:hover { background: #f5eafa; border-color: #8e44ad; }
+.add-se-btn:disabled { color: #bbb; border-color: #e0e0e0; cursor: not-allowed; background: none; }
+.se-count-hint { font-size: 0.75rem; color: #999; text-align: right; margin-top: 4px; }
 
 </style>
 </head>
-
 <body>
 
-<h2>年金資産シミュレーター</h2>
+<h1>💰 年金資産シミュレーター</h1>
 
-<div class="section">
-
-<b>試算前提</b><br>
-給与：入力金額の80%手取り<br>
-公的年金：入力金額の90%手取り<br>
-年金：マクロ経済スライド（インフレ×0.8）<br>
-DC取り崩し：受取90%手取り<br>
-
+<div class="premise">
+  <strong>試算前提</strong><br>
+  給与：<span id="prem-salary">80</span>%手取り ／
+  公的年金：<span id="prem-pension">90</span>%手取り ／
+  年金：マクロ経済スライド（インフレ×0.8）<br>
+  DC取り崩し：<span id="prem-dc">90</span>%手取り ／
+  NISA取り崩し：非課税 ／
+  その他金融資産取り崩し：80%手取り（20%源泉分離課税）
 </div>
 
+<!-- 手取り率の詳細設定 -->
 <div class="section">
+  <details id="netRateDetails">
+    <summary style="cursor:pointer;font-size:1rem;font-weight:600;color:#555;padding:4px 0;user-select:none;display:flex;align-items:center;justify-content:space-between;">
+      <span>⚙️ 手取り率の詳細設定</span>
+      <span style="font-size:0.78rem;color:#3498db;font-weight:400;">クリックで展開</span>
+    </summary>
+    <div style="margin-top:14px;border-top:2px solid #e8ecef;padding-top:14px;">
+      <div class="form-grid">
 
-<h3>基本設定</h3>
+        <div class="form-item" style="grid-column:1/-1">
+          <label>給与手取り率
+            <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:6px;">社会保険料・所得税の影響。公務員・会社員は低め、フリーランスは高め。</span>
+          </label>
+          <div class="slider-row">
+            <input type="range" id="salaryNetRate" min="0.70" max="0.85" step="0.01" value="0.80"
+                   oninput="updateNetRateLabels()">
+            <span class="slider-val" id="salaryNetLabel">80%</span>
+          </div>
+        </div>
 
-開始年齢<br>
-<input type="number" id="startAge" value="60"><br>
+        <div class="form-item" style="grid-column:1/-1">
+          <label>公的年金手取り率
+            <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:6px;">年金所得控除後の実質手取り。企業年金・個人年金を加算する場合は低め。</span>
+          </label>
+          <div class="slider-row">
+            <input type="range" id="pensionNetRate" min="0.70" max="0.99" step="0.01" value="0.90"
+                   oninput="updateNetRateLabels()">
+            <span class="slider-val" id="pensionNetLabel">90%</span>
+          </div>
+        </div>
 
-想定寿命<br>
-<input type="number" id="lifeExpectancy" value="90"><br>
+        <div class="form-item" style="grid-column:1/-1">
+          <label>DC取り崩し手取り率
+            <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:6px;">一時金受取は高め（退職所得控除大）・年金受取は低め（公的年金と合算課税）。</span>
+          </label>
+          <div class="slider-row">
+            <input type="range" id="dcNetRate" min="0.70" max="0.99" step="0.01" value="0.90"
+                   oninput="updateNetRateLabels()">
+            <span class="slider-val" id="dcNetLabel">90%</span>
+          </div>
+        </div>
 
-退職年齢<br>
-<input type="number" id="retirementAge" value="65"><br>
-
-年金開始年齢<br>
-<input type="number" id="pensionStartAge" value="65"><br>
-
+      </div>
+    </div>
+  </details>
 </div>
 
+<!-- 基本設定 -->
 <div class="section">
-
-<h3>生活費</h3>
-
-生活費（月）<br>
-<input type="text" id="basicLivingCost" value="200,000" onblur="formatNumber(this)"><br>
-
-娯楽費（月）<br>
-<input type="text" id="leisureCost" value="100,000" onblur="formatNumber(this)"><br>
-
-インフレ率<br>
-<input type="number" step="0.01" id="inflationRate" value="0.02">
-
+  <h3>基本設定</h3>
+  <div class="form-grid">
+    <div class="form-item">
+      <label for="startAge">開始年齢</label>
+      <input type="number" id="startAge" value="60" min="40" max="80" onchange="updateDynamicLabels(); validateInputs();">
+      <span class="error-msg" id="err-startAge"></span>
+    </div>
+    <div class="form-item">
+      <label for="lifeExpectancy">想定寿命</label>
+      <input type="number" id="lifeExpectancy" value="90" min="60" max="110" onchange="validateInputs();">
+      <span class="error-msg" id="err-lifeExpectancy"></span>
+    </div>
+    <div class="form-item">
+      <label for="retirementAge">退職年齢</label>
+      <input type="number" id="retirementAge" value="65" min="40" max="80" onchange="validateInputs();">
+      <span class="error-msg" id="err-retirementAge"></span>
+    </div>
+    <div class="form-item">
+      <label for="pensionStartAge">年金開始年齢</label>
+      <input type="number" id="pensionStartAge" value="65" min="60" max="75" onchange="validateInputs();">
+      <span class="error-msg" id="err-pensionStartAge"></span>
+    </div>
+  </div>
 </div>
 
+<!-- 生活費 -->
 <div class="section">
-
-<h3>収入</h3>
-
-60歳以降給与（月）<br>
-<input type="text" id="salaryAfter60" value="300,000" onblur="formatNumber(this)"><br>
-
-公的年金（月）<br>
-<input type="text" id="publicPension" value="250,000" onblur="formatNumber(this)"><br>
-
+  <h3>生活費</h3>
+  <div class="form-grid">
+    <div class="form-item">
+      <label for="basicLivingCost">生活費（月）</label>
+      <input type="text" id="basicLivingCost" value="200,000" onblur="formatNumber(this)">
+    </div>
+    <div class="form-item">
+      <label for="leisureCost">娯楽費（月）</label>
+      <input type="text" id="leisureCost" value="100,000" onblur="formatNumber(this)">
+    </div>
+    <div class="form-item" style="grid-column: 1 / -1;">
+      <label>インフレ率</label>
+      <div class="slider-row">
+        <input type="range" id="inflationRate" min="0" max="0.05" step="0.005" value="0.02" oninput="updateInflationLabel()">
+        <span class="slider-val" id="inflationLabel">2.0%</span>
+      </div>
+    </div>
+  </div>
 </div>
 
+<!-- 特別支出 -->
 <div class="section">
-
-<h3>資産</h3>
-
-DC残高<br>
-<input type="text" id="dcBalance" value="20,000,000" onblur="formatNumber(this)"><br>
-
-想定利回り<br>
-
-<input type="range"
-id="dcReturnRate"
-min="0"
-max="0.1"
-step="0.005"
-value="0.05"
-oninput="updateSliderValue()">
-
-<span class="sliderValue" id="returnRateLabel">5%</span>
-
-<br><br>
-
-投資リスク（標準偏差）
-
-<input type="range"
-id="returnVolatility"
-min="0"
-max="0.3"
-step="0.01"
-value="0.15"
-oninput="updateVolatilityLabel()">
-
-<span class="sliderValue" id="volatilityLabel">15%</span>
-
+  <h3>✨ 特別支出</h3>
+  <div id="seList" class="se-list"></div>
+  <button class="add-se-btn" id="addSeBtn" onclick="addSpecialExpense()">
+    ＋ 項目を追加
+  </button>
+  <div class="se-count-hint" id="seCountHint">0 / 10項目</div>
 </div>
 
+<!-- 収入 -->
+<div class="section">
+  <h3>収入</h3>
+  <div class="form-grid">
+    <div class="form-item">
+      <label for="salaryAfter60" id="salaryLabel">60歳以降給与（月）</label>
+      <input type="text" id="salaryAfter60" value="300,000" onblur="formatNumber(this)">
+    </div>
+    <div class="form-item">
+      <label for="publicPension">公的年金（月）</label>
+      <input type="text" id="publicPension" value="250,000" onblur="formatNumber(this)">
+    </div>
+  </div>
+</div>
+
+<!-- 資産 -->
+<div class="section">
+  <h3>資産</h3>
+  <div class="form-grid">
+    <div class="form-item">
+      <label for="dcBalance">DC（確定拠出年金）残高</label>
+      <input type="text" id="dcBalance" value="20,000,000" onblur="formatNumber(this)">
+    </div>
+    <div class="form-item">
+      <label for="nisaBalance">NISA残高</label>
+      <input type="text" id="nisaBalance" value="0" onblur="formatNumber(this)">
+    </div>
+    <div class="form-item">
+      <label for="otherBalance">その他金融資産残高</label>
+      <input type="text" id="otherBalance" value="0" onblur="formatNumber(this)">
+    </div>
+    <div class="form-item" style="grid-column: 1 / -1;">
+      <label>想定利回り（全資産共通）</label>
+      <div class="slider-row">
+        <input type="range" id="dcReturnRate" min="0" max="0.1" step="0.005" value="0.05" oninput="updateReturnLabel()">
+        <span class="slider-val" id="returnRateLabel">5.0%</span>
+      </div>
+    </div>
+    <div class="form-item" style="grid-column: 1 / -1;">
+      <label>投資リスク（標準偏差）</label>
+      <div class="slider-row">
+        <input type="range" id="returnVolatility" min="0" max="0.3" step="0.01" value="0.15" oninput="updateVolatilityLabel()">
+        <span class="slider-val" id="volatilityLabel">15%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 取り崩し順序 -->
+<div class="section">
+  <h3>取り崩し順序</h3>
+  <div class="order-container">
+    <div class="order-hint">⠿ ドラッグして順序を変更できます。上から順に取り崩します（相続税対策：DCを先に使い切る、NISAは残したいなど）</div>
+    <div class="order-list" id="orderList">
+      <div class="order-item" draggable="true" data-asset="DC">
+        <span class="drag-handle">⠿</span>
+        <span class="order-rank rank-1" id="rank-DC">1</span>
+        <span class="order-name">DC（確定拠出年金）</span>
+        <span class="tax-badge badge-dc">課税10%</span>
+      </div>
+      <div class="order-item" draggable="true" data-asset="NISA">
+        <span class="drag-handle">⠿</span>
+        <span class="order-rank rank-2" id="rank-NISA">2</span>
+        <span class="order-name">NISA</span>
+        <span class="tax-badge badge-nisa">非課税</span>
+      </div>
+      <div class="order-item" draggable="true" data-asset="OTHER">
+        <span class="drag-handle">⠿</span>
+        <span class="order-rank rank-3" id="rank-OTHER">3</span>
+        <span class="order-name">その他金融資産</span>
+        <span class="tax-badge badge-other">課税20%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="validationError"></div>
 <button id="simulateBtn" onclick="runSimulation()">シミュレーション実行</button>
 
-<div id="assetLife" class="resultBox"></div>
+<!-- 結果 -->
+<div class="result-section" id="resultSection">
+  <div class="result-main" id="assetLife"></div>
+  <div class="result-sub" id="failureProbability"></div>
+  <canvas id="balanceChart"></canvas>
+</div>
 
-<div id="failureProbability"
-style="font-size:22px;"></div>
-
-<hr>
-
-<canvas id="balanceChart"></canvas>
-
-<hr>
-
-<h3>シミュレーション詳細</h3>
-<div id="resultTable"></div>
+<div class="result-section" id="tableSection">
+  <h3 style="margin-top:0;">シミュレーション詳細</h3>
+  <div class="table-wrap">
+    <div id="resultTable"></div>
+  </div>
+</div>
 
 <script>
 
 let chart;
+let lastDepletionAge = null;
 
-function updateSliderValue(){
-
-const val=document.getElementById("dcReturnRate").value;
-
-document.getElementById("returnRateLabel")
-.innerText=(val*100).toFixed(1)+"%";
-
+/* ===== スライダー ===== */
+function updateReturnLabel() {
+  document.getElementById("returnRateLabel").textContent =
+    (document.getElementById("dcReturnRate").value * 100).toFixed(1) + "%";
+}
+function updateVolatilityLabel() {
+  document.getElementById("volatilityLabel").textContent =
+    (document.getElementById("returnVolatility").value * 100).toFixed(0) + "%";
+}
+function updateInflationLabel() {
+  document.getElementById("inflationLabel").textContent =
+    (document.getElementById("inflationRate").value * 100).toFixed(1) + "%";
 }
 
-function updateVolatilityLabel(){
-
-const val=document.getElementById("returnVolatility").value;
-
-document.getElementById("volatilityLabel")
-.innerText=(val*100).toFixed(0)+"%";
-
+/* ===== 動的ラベル ===== */
+function updateDynamicLabels() {
+  const age = document.getElementById("startAge").value;
+  document.getElementById("salaryLabel").textContent = age + "歳以降給与（月）";
 }
 
-function formatNumber(input){
+/* ===== フォーマット ===== */
+function formatNumber(input) {
+  const v = input.value.replace(/,/g, '');
+  if (v !== "" && !isNaN(v)) input.value = Number(v).toLocaleString();
+}
+function removeComma(v) { return Number(v.replace(/,/g, '')); }
+function toManEn(v) { return Math.round(v / 10000).toLocaleString() + "万円"; }
 
-let value=input.value.replace(/,/g,'');
-
-if(value==="")return;
-
-if(!isNaN(value)){
-input.value=Number(value).toLocaleString();
+/* ===== バリデーション ===== */
+function validateInputs() {
+  const startAge   = Number(document.getElementById('startAge').value);
+  const lifeExp    = Number(document.getElementById('lifeExpectancy').value);
+  const retireAge  = Number(document.getElementById('retirementAge').value);
+  const pensionAge = Number(document.getElementById('pensionStartAge').value);
+  const errors = [];
+  ['startAge','lifeExpectancy','retirementAge','pensionStartAge'].forEach(id => {
+    document.getElementById(id).classList.remove('input-error');
+    document.getElementById('err-' + id).textContent = '';
+  });
+  if (retireAge < startAge)  { errors.push("退職年齢は開始年齢以上にしてください。"); setFieldError('retirementAge', '開始年齢より小さい値は無効です'); }
+  if (pensionAge < startAge) { errors.push("年金開始年齢は開始年齢以上にしてください。"); setFieldError('pensionStartAge', '開始年齢より小さい値は無効です'); }
+  if (lifeExp <= startAge)   { errors.push("想定寿命は開始年齢より大きくしてください。"); setFieldError('lifeExpectancy', '開始年齢より大きい値にしてください'); }
+  if (pensionAge > lifeExp)  { errors.push("年金開始年齢が想定寿命を超えています。"); setFieldError('pensionStartAge', '想定寿命以下にしてください'); }
+  const banner = document.getElementById('validationError');
+  const btn    = document.getElementById('simulateBtn');
+  if (errors.length > 0) {
+    banner.style.display = 'block';
+    banner.innerHTML = '⚠️ ' + errors.join('<br>⚠️ ');
+    btn.disabled = true;
+    return false;
+  }
+  banner.style.display = 'none';
+  btn.disabled = false;
+  return true;
+}
+function setFieldError(id, msg) {
+  document.getElementById(id).classList.add('input-error');
+  document.getElementById('err-' + id).textContent = msg;
 }
 
-}
+/* ===== 取り崩し順序 ドラッグ＆ドロップ ===== */
+const orderList = document.getElementById('orderList');
+let dragSrc = null;
 
-function removeComma(value){
-return Number(value.replace(/,/g,''));
-}
-
-async function runSimulation(){
-
-const button=document.getElementById("simulateBtn");
-button.innerText="計算中...";
-
-const lifeExpectancy=
-Number(document.getElementById('lifeExpectancy').value);
-
-const requestData={
-
-startAge:Number(document.getElementById('startAge').value),
-lifeExpectancy:lifeExpectancy,
-retirementAge:Number(document.getElementById('retirementAge').value),
-pensionStartAge:Number(document.getElementById('pensionStartAge').value),
-
-basicLivingCost:removeComma(document.getElementById('basicLivingCost').value),
-leisureCost:removeComma(document.getElementById('leisureCost').value),
-
-salaryAfter60:removeComma(document.getElementById('salaryAfter60').value),
-publicPension:removeComma(document.getElementById('publicPension').value),
-
-dcBalance:removeComma(document.getElementById('dcBalance').value),
-
-inflationRate:Number(document.getElementById('inflationRate').value),
-dcReturnRate:Number(document.getElementById('dcReturnRate').value),
-
-returnVolatility:Number(document.getElementById('returnVolatility').value)
-
-};
-
-const response=await fetch('/api/simulate',{
-method:'POST',
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify(requestData)
+orderList.querySelectorAll('.order-item').forEach(item => {
+  item.addEventListener('dragstart', e => {
+    dragSrc = item;
+    item.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  item.addEventListener('dragend', () => {
+    item.classList.remove('dragging');
+    orderList.querySelectorAll('.order-item').forEach(i => i.classList.remove('drag-over'));
+    updateRankBadges();
+  });
+  item.addEventListener('dragover', e => {
+    e.preventDefault();
+    if (item !== dragSrc) {
+      item.classList.add('drag-over');
+      const rect = item.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      if (after) orderList.insertBefore(dragSrc, item.nextSibling);
+      else orderList.insertBefore(dragSrc, item);
+    }
+  });
+  item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+  item.addEventListener('drop', e => { e.preventDefault(); item.classList.remove('drag-over'); });
 });
 
-const data=await response.json();
-
-button.innerText="シミュレーション実行";
-
-const assetLifeDiv=document.getElementById("assetLife");
-
-if(data.assetDepletionAge===-1){
-
-assetLifeDiv.innerHTML=
-"🟢 資産は "+lifeExpectancy+" 歳まで持ちます";
-
-}else{
-
-assetLifeDiv.innerHTML=
-"🔴 資産寿命："+data.assetDepletionAge+"歳";
-
+function updateRankBadges() {
+  const rankClasses = ['rank-1', 'rank-2', 'rank-3'];
+  orderList.querySelectorAll('.order-item').forEach((item, i) => {
+    const badge = item.querySelector('.order-rank');
+    badge.textContent = i + 1;
+    badge.className = 'order-rank ' + rankClasses[i];
+  });
 }
 
-const prob=(data.failureProbability*100).toFixed(1);
-
-document.getElementById("failureProbability")
-.innerHTML="資産破綻確率："+prob+"%";
-
-const ages=data.yearlyResults.map(y=>y.age);
-const balances=data.yearlyResults.map(y=>y.balance);
-const incomes=data.yearlyResults.map(y=>y.income);
-const expenses=data.yearlyResults.map(y=>y.expense);
-
-const ctx=document.getElementById('balanceChart');
-
-if(chart){
-chart.destroy();
+function getWithdrawalOrder() {
+  return [...orderList.querySelectorAll('.order-item')].map(i => i.dataset.asset);
 }
 
-chart=new Chart(ctx,{
-
-type:'line',
-
-data:{
-labels:ages,
-datasets:[
-
-{
-label:'DC残高',
-data:balances,
-borderColor:'blue',
-borderWidth:3,
-tension:0.3,
-yAxisID:'y1'
-},
-
-{
-label:'収入',
-data:incomes,
-borderColor:'green',
-borderWidth:2,
-tension:0.3,
-yAxisID:'y'
-},
-
-{
-label:'支出',
-data:expenses,
-borderColor:'red',
-borderWidth:2,
-tension:0.3,
-yAxisID:'y'
+/* ===== シミュレーション実行 ===== */
+async function runSimulation() {
+  if (!validateInputs()) return;
+  const button = document.getElementById("simulateBtn");
+  button.textContent = "計算中...";
+  button.disabled = true;
+  const lifeExp = Number(document.getElementById('lifeExpectancy').value);
+  const requestData = {
+    startAge:        Number(document.getElementById('startAge').value),
+    lifeExpectancy:  lifeExp,
+    retirementAge:   Number(document.getElementById('retirementAge').value),
+    pensionStartAge: Number(document.getElementById('pensionStartAge').value),
+    basicLivingCost: removeComma(document.getElementById('basicLivingCost').value),
+    leisureCost:     removeComma(document.getElementById('leisureCost').value),
+    salaryAfter60:   removeComma(document.getElementById('salaryAfter60').value),
+    publicPension:   removeComma(document.getElementById('publicPension').value),
+    dcBalance:       removeComma(document.getElementById('dcBalance').value),
+    nisaBalance:     removeComma(document.getElementById('nisaBalance').value),
+    otherBalance:    removeComma(document.getElementById('otherBalance').value),
+    inflationRate:   Number(document.getElementById('inflationRate').value),
+    dcReturnRate:    Number(document.getElementById('dcReturnRate').value),
+    returnVolatility:Number(document.getElementById('returnVolatility').value),
+    withdrawalOrder: getWithdrawalOrder(),
+    specialExpenses: getSpecialExpenses(),
+    salaryNetRate:   Number(document.getElementById('salaryNetRate').value),
+    pensionNetRate:  Number(document.getElementById('pensionNetRate').value),
+    dcNetRate:       Number(document.getElementById('dcNetRate').value)
+  };
+  try {
+    const resp = await fetch('/api/simulate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestData)
+    });
+    if (!resp.ok) throw new Error('サーバーエラー: ' + resp.status);
+    const data = await resp.json();
+    button.textContent = "シミュレーション実行";
+    button.disabled = false;
+    lastDepletionAge = data.assetDepletionAge !== -1 ? data.assetDepletionAge : null;
+    const assetLifeDiv = document.getElementById("assetLife");
+    if (data.assetDepletionAge === -1) {
+      assetLifeDiv.innerHTML = '🟢 資産は ' + lifeExp + ' 歳まで持ちます';
+    } else {
+      assetLifeDiv.innerHTML = '🔴 資産寿命：' + data.assetDepletionAge + '歳';
+    }
+    document.getElementById("failureProbability").textContent =
+      '資産破綻確率：' + (data.failureProbability * 100).toFixed(1) + '％（モンテカルロ10,000回試算）';
+    document.getElementById('resultSection').style.display = 'block';
+    document.getElementById('tableSection').style.display = 'block';
+    drawChart(data);
+    drawTable(data);
+  } catch (e) {
+    button.textContent = "シミュレーション実行";
+    button.disabled = false;
+    alert('エラーが発生しました：' + e.message);
+  }
 }
 
-]
-},
+/* ===== 特別支出 追加/削除/収集 ===== */
+const SE_CATEGORIES = [
+  '教育費', '車両費', '住居', '旅行', '介護', '医療費', '贈与', 'その他'
+];
 
-options:{
+let seCount = 0;
 
-responsive:true,
+function addSpecialExpense() {
+  if (seCount >= 10) return;
+  seCount++;
+  const id = 'se-' + Date.now();
+  const startAge = Number(document.getElementById('startAge').value) || 60;
+  const lifeExp  = Number(document.getElementById('lifeExpectancy').value) || 90;
 
-interaction:{
-mode:'index',
-intersect:false
-},
+  const catOptions = SE_CATEGORIES.map(c =>
+    `<option value="${c}">${c}</option>`
+  ).join('');
 
-plugins:{
-legend:{position:'top'}
-},
-
-scales:{
-
-y:{
-type:'linear',
-position:'left',
-title:{display:true,text:'年間収支'}
-},
-
-y1:{
-type:'linear',
-position:'right',
-grid:{drawOnChartArea:false},
-title:{display:true,text:'DC残高'}
+  const card = document.createElement('div');
+  card.className = 'se-card';
+  card.dataset.id = id;
+  card.innerHTML = `
+    <div class="se-card-header">
+      <select class="se-cat">${catOptions}</select>
+      <input class="se-label-input" type="text" placeholder="メモ（中学受験など）" maxlength="30">
+      <button class="se-del-btn" onclick="removeSpecialExpense('${id}')" title="削除">×</button>
+    </div>
+    <div class="se-row">
+      <label>発生期間</label>
+      <input class="se-age-input se-from" type="number" value="${startAge}" min="0" max="${lifeExp}">
+      <label>歳 〜</label>
+      <input class="se-age-input se-to" type="number" value="${lifeExp}" min="0" max="${lifeExp}">
+      <label>歳</label>
+    </div>
+    <div style="margin-top:8px;">
+      <label style="font-size:0.8rem;color:#777">年間支出額（円）</label><br>
+      <input class="se-amount-input" type="text" placeholder="1,000,000" onblur="formatNumber(this)">
+    </div>
+  `;
+  document.getElementById('seList').appendChild(card);
+  updateSeUI();
 }
 
+function removeSpecialExpense(id) {
+  const card = document.querySelector(`.se-card[data-id="${id}"]`);
+  if (card) { card.remove(); seCount--; updateSeUI(); }
 }
 
+function updateSeUI() {
+  document.getElementById('seCountHint').textContent = seCount + ' / 10項目';
+  document.getElementById('addSeBtn').disabled = seCount >= 10;
 }
 
-});
-
-let tableHtml=`
-<table border="1" cellpadding="5">
-<tr>
-<th>年齢</th>
-<th>収入</th>
-<th>支出</th>
-<th>DC残高</th>
-</tr>
-`;
-
-data.yearlyResults.forEach(y=>{
-
-tableHtml+=`
-<tr>
-<td>${y.age}</td>
-<td>${y.income.toLocaleString()}</td>
-<td>${y.expense.toLocaleString()}</td>
-<td>${y.balance.toLocaleString()}</td>
-</tr>
-`;
-
-});
-
-tableHtml+="</table>";
-
-document.getElementById("resultTable").innerHTML=tableHtml;
-
+function getSpecialExpenses() {
+  return [...document.querySelectorAll('.se-card')].map(card => ({
+    category:     card.querySelector('.se-cat').value,
+    label:        card.querySelector('.se-label-input').value,
+    fromAge:      Number(card.querySelector('.se-from').value),
+    toAge:        Number(card.querySelector('.se-to').value),
+    annualAmount: removeComma(card.querySelector('.se-amount-input').value || '0')
+  })).filter(se => se.annualAmount > 0);
 }
 
-updateSliderValue();
+/* ===== グラフ描画 ===== */
+function drawChart(data) {
+  const ages      = data.yearlyResults.map(y => y.age);
+  const dcBals    = data.yearlyResults.map(y => y.dcBalance);
+  const nisaBals  = data.yearlyResults.map(y => y.nisaBalance);
+  const otherBals = data.yearlyResults.map(y => y.otherBalance);
+  const incomes   = data.yearlyResults.map(y => y.income);
+  const expenses  = data.yearlyResults.map(y => y.expense);
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('balanceChart'), {
+    type: 'line',
+    data: {
+      labels: ages,
+      datasets: [
+        {
+          label: 'DC残高',
+          data: dcBals,
+          borderColor: '#8e44ad',
+          backgroundColor: 'rgba(142,68,173,0.07)',
+          borderWidth: 2.5, tension: 0.3, fill: true,
+          yAxisID: 'y1', pointRadius: 3, pointHoverRadius: 5
+        },
+        {
+          label: 'NISA残高',
+          data: nisaBals,
+          borderColor: '#27ae60',
+          backgroundColor: 'rgba(39,174,96,0.07)',
+          borderWidth: 2.5, tension: 0.3, fill: true,
+          yAxisID: 'y1', pointRadius: 3, pointHoverRadius: 5
+        },
+        {
+          label: 'その他残高',
+          data: otherBals,
+          borderColor: '#e67e22',
+          backgroundColor: 'rgba(230,126,34,0.07)',
+          borderWidth: 2.5, tension: 0.3, fill: true,
+          yAxisID: 'y1', pointRadius: 3, pointHoverRadius: 5
+        },
+        {
+          label: '収入',
+          data: incomes,
+          borderColor: '#2ecc71',
+          borderWidth: 2, tension: 0.3,
+          yAxisID: 'y', pointRadius: 2, pointHoverRadius: 4,
+          borderDash: [4, 2]
+        },
+        {
+          label: '支出',
+          data: expenses,
+          borderColor: '#e74c3c',
+          borderWidth: 2, tension: 0.3,
+          yAxisID: 'y', pointRadius: 2, pointHoverRadius: 4,
+          borderDash: [4, 2]
+        },
+        {
+          label: '特別支出',
+          data: data.yearlyResults.map(y => y.specialExpense),
+          borderColor: '#9b59b6',
+          backgroundColor: 'rgba(155,89,182,0.10)',
+          borderWidth: 2, tension: 0.3, fill: true,
+          yAxisID: 'y', pointRadius: 2, pointHoverRadius: 4,
+          borderDash: [6, 3]
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        y: {
+          type: 'linear', position: 'left',
+          title: { display: true, text: '年間収支' },
+          ticks: { callback: v => (v / 10000).toFixed(0) + '万' }
+        },
+        y1: {
+          type: 'linear', position: 'right',
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: '資産残高' },
+          ticks: { callback: v => (v / 10000).toFixed(0) + '万' }
+        }
+      }
+    }
+  });
+}
+
+/* ===== テーブル描画 ===== */
+function drawTable(data) {
+  let html = `
+    <table>
+      <thead><tr>
+        <th>年齢</th>
+        <th>収入</th>
+        <th>支出（合計）</th>
+        <th style="color:#9b59b6;">特別支出</th>
+        <th style="color:#8e44ad;">DC残高</th>
+        <th style="color:#27ae60;">NISA残高</th>
+        <th style="color:#e67e22;">その他残高</th>
+      </tr></thead><tbody>`;
+  let depleted = false;
+  data.yearlyResults.forEach(y => {
+    let cls = '';
+    if (y.totalBalance === 0 && !depleted && lastDepletionAge !== null) {
+      cls = 'depletion-row'; depleted = true;
+    } else if (depleted) { cls = 'depleted'; }
+    html += `<tr class="${cls}">
+      <td>${y.age}歳</td>
+      <td>${toManEn(y.income)}</td>
+      <td>${toManEn(y.expense)}</td>
+      <td style="color:#9b59b6;font-size:0.82rem;">${y.specialExpense > 0 ? toManEn(y.specialExpense) : '-'}</td>
+      <td>${toManEn(y.dcBalance)}</td>
+      <td>${toManEn(y.nisaBalance)}</td>
+      <td>${toManEn(y.otherBalance)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById("resultTable").innerHTML = html;
+}
+
+/* ===== 手取り率ラベル更新 ===== */
+function updateNetRateLabels() {
+  const s = Math.round(Number(document.getElementById('salaryNetRate').value)  * 100);
+  const p = Math.round(Number(document.getElementById('pensionNetRate').value) * 100);
+  const d = Math.round(Number(document.getElementById('dcNetRate').value)      * 100);
+  document.getElementById('salaryNetLabel').textContent  = s + '%';
+  document.getElementById('pensionNetLabel').textContent = p + '%';
+  document.getElementById('dcNetLabel').textContent      = d + '%';
+  // 試算前提ボックスにリアルタイム反映
+  document.getElementById('prem-salary').textContent  = s;
+  document.getElementById('prem-pension').textContent = p;
+  document.getElementById('prem-dc').textContent      = d;
+}
+
+/* ===== 初期化 ===== */
+updateReturnLabel();
 updateVolatilityLabel();
+updateInflationLabel();
+updateNetRateLabels();
+updateDynamicLabels();
+updateRankBadges();
 
 </script>
-
 </body>
 </html>
