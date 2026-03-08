@@ -1,0 +1,21 @@
+# Git
+.git
+.gitignore
+
+# ビルド成果物
+PensionStartingSimulator/build/
+PensionStartingSimulator/.gradle/
+
+# IDE
+.idea/
+*.iml
+*.iws
+.vscode/
+
+# ログ・一時ファイル
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
