@@ -61,9 +61,9 @@ public class SimulationService {
             double specialExp = calcSpecialExpense(req, age);
             yearlyExpense += specialExp;
 
-            // 給与
+            // 給与（インフレ連動）
             if (age < req.retirementAge) {
-                income += req.salaryAfter60 * 12 * salaryNet;
+                income += req.salaryAfter60 * 12 * salaryNet * inflationMult;
             }
 
             // 公的年金
@@ -167,7 +167,7 @@ public class SimulationService {
                 yearlyExpense += calcSpecialExpense(req, age);
 
                 if (age < req.retirementAge) {
-                    income += req.salaryAfter60 * 12 * salaryNet;
+                    income += req.salaryAfter60 * 12 * salaryNet * inflationMult;
                 }
                 if (age >= req.pensionStartAge) {
                     income += req.publicPension * 12 * pensionMult * pensionNet;
