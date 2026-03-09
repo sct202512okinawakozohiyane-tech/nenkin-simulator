@@ -23,6 +23,9 @@ public class SimulationService {
     private static final double NISA_NET_RATE  = 1.0; // NISA: 非課税
     private static final double OTHER_NET_RATE = 0.8; // その他: 20%源泉分離課税
 
+    // DC 受取可能最低年齢（法律上の制約）
+    private static final int DC_MIN_WITHDRAW_AGE = 60;
+
     // デフォルト取り崩し順
     private static final List<String> DEFAULT_ORDER = List.of("DC", "NISA", "OTHER");
 
@@ -75,6 +78,8 @@ public class SimulationService {
                 double remaining = shortfall;
                 for (String asset : order) {
                     if (remaining <= 0) break;
+                    // DC は 60 歳未満では受け取り不可（法律上の制約）
+                    if ("DC".equals(asset) && age < DC_MIN_WITHDRAW_AGE) continue;
                     double netRate = getNetRate(asset, dcNet);
                     double bal = getBalance(dc, nisa, other, asset);
                     if (bal <= 0) continue;
@@ -174,6 +179,8 @@ public class SimulationService {
                     double remaining = shortfall;
                     for (String asset : order) {
                         if (remaining <= 0) break;
+                        // DC は 60 歳未満では受け取り不可（法律上の制約）
+                        if ("DC".equals(asset) && age < DC_MIN_WITHDRAW_AGE) continue;
                         double netRate = getNetRate(asset, dcNet);
                         double bal = getBalance(dc, nisa, other, asset);
                         if (bal <= 0) continue;
