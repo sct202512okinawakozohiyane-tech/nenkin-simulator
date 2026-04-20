@@ -14,41 +14,46 @@ import com.example.pension.model.YearResult;
 @Service
 public class SimulationService {
 
-    // 給与・年金の手取率
-    private static final double SALARY_NET_RATE  = 0.8;
+    private static final double SALARY_NET_RATE = 0.8;
     private static final double PENSION_NET_RATE = 0.9;
 
-    // 各資産の取り崩し手取率
-    private static final double DC_NET_RATE    = 0.9; // DC: 約10%課税（退職・年金所得）
-    private static final double NISA_NET_RATE  = 1.0; // NISA: 非課税
-    private static final double OTHER_NET_RATE = 0.8; // その他: 20%源泉分離課税
-
-    // DC 受取可能最低年齢（法律上の制約）
+    private static final double DC_NET_RATE = 0.9;
+    private static final double NISA_NET_RATE = 1.0;
+    private static final double OTHER_NET_RATE = 0.8;
     private static final int DC_MIN_WITHDRAW_AGE = 60;
 
-    // デフォルト取り崩し順
-    private static final List<String> DEFAULT_ORDER = List.of("DC", "NISA", "OTHER");
+    private static final List<String> DEFAULT_ORDER = List.of("DC", "NASDAQ", "OTHER");
 
-    // ---- メインシミュレーション ----------------------------------------
+    private static final double DEFAULT_NISA_BALANCE = 5_000_000;
+    private static final double DEFAULT_OTHER_BALANCE = 10_000_000;
+    private static final int DEFAULT_DC_START_AGE = 60;
+    private static final int DEFAULT_DC_ANNUITY_YEARS = 20;
 
     public SimulationResponse simulate(SimulationRequest req) {
 
-        // リクエストの手取り率を優先、null の場合はデフォルト定数にフォールバック
-        final double salaryNet  = req.salaryNetRate  != null ? req.salaryNetRate  : SALARY_NET_RATE;
+        final double salaryNet = req.salaryNetRate != null ? req.salaryNetRate : SALARY_NET_RATE;
         final double pensionNet = req.pensionNetRate != null ? req.pensionNetRate : PENSION_NET_RATE;
-        final double dcNet      = req.dcNetRate      != null ? req.dcNetRate      : DC_NET_RATE;
+        final double dcNet = req.dcNetRate != null ? req.dcNetRate : DC_NET_RATE;
 
-        double dc    = req.dcBalance;
-        double nisa  = req.nisaBalance;
-        double other = req.otherBalance;
+        double dc = req.dcBalance;
+        double nisa = req.nisaBalance != 0 ? req.nisaBalance : DEFAULT_NISA_BALANCE;
+        double other = req.otherBalance != 0 ? req.otherBalance : DEFAULT_OTHER_BALANCE;
+
+        int dcStartAge = (int)(req.dcStartAge != 0 ? req.dcStartAge : DEFAULT_DC_START_AGE);
+        double dcLumpSum = req.dcLumpSumAmount;
+        int dcAnnuityYears = req.dcAnnuityYears > 0 ? req.dcAnnuityYears : DEFAULT_DC_ANNUITY_YEARS;
 
         List<YearResult> results = new ArrayList<>();
 
         double inflationMult = 1.0;
-        double pensionMult   = 1.0;
+        double pensionMult = 1.0;
         Integer depletionAge = null;
 
-        List<String> order = resolveOrder(req.withdrawalOrder);
+        double dcRemainingForAnnuity = 0;
+        double dcAnnuityPayment = 0;
+        boolean dcAnnuityStarted = false;
+
+        List<String> order = resolveOrder(req.withdrawalOrder, dcStartAge);
 
         for (int age = req.startAge; age <= req.lifeExpectancy; age++) {
 
@@ -57,105 +62,141 @@ public class SimulationService {
             double yearlyExpense =
                 (req.basicLivingCost + req.leisureCost) * 12 * inflationMult;
 
-            // 特別支出（年齢範囲が一致する項目を加算）
             double specialExp = calcSpecialExpense(req, age);
             yearlyExpense += specialExp;
 
-            // 給与（インフレ連動）
             if (age < req.retirementAge) {
                 income += req.salaryAfter60 * 12 * salaryNet * inflationMult;
             }
 
-            // 公的年金
-            if (age >= req.pensionStartAge) {
+            if (age >= req.publicPensionStartAge) {
                 income += req.publicPension * 12 * pensionMult * pensionNet;
+            }
+
+            double dcWithdrawal = 0;
+
+            if (age >= dcStartAge && dc > 0) {
+                if (!dcAnnuityStarted) {
+                    if (dcLumpSum > 0) {
+                        double withdraw = Math.min(dcLumpSum, dc);
+                        dc -= withdraw;
+                        income += withdraw * dcNet;
+                        dcWithdrawal += withdraw;
+                    }
+
+                    double remainingForAnnuity = dc;
+                    if (remainingForAnnuity > 0 && dcAnnuityYears > 0) {
+                        dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcNet;
+                        dcRemainingForAnnuity = remainingForAnnuity;
+                        dcAnnuityStarted = true;
+                    }
+                    dc = 0;
+                }
+
+                if (dcAnnuityStarted && dcAnnuityYears > 0) {
+                    int yearsPassed = age - dcStartAge;
+                    if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
+                        double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity * (1 + req.dcReturnRate));
+                        income += payment;
+                        dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
+                        dcAnnuityPayment = dcRemainingForAnnuity / (dcAnnuityYears - yearsPassed) * dcNet;
+                        dcWithdrawal += payment / dcNet;
+                    }
+                }
             }
 
             double shortfall = yearlyExpense - income;
 
-            // 取り崩し（指定順序で各資産から）
             if (shortfall > 0) {
                 double remaining = shortfall;
                 for (String asset : order) {
                     if (remaining <= 0) break;
-                    // DC は 60 歳未満では受け取り不可（法律上の制約）
-                    if ("DC".equals(asset) && age < DC_MIN_WITHDRAW_AGE) continue;
+                    if ("DC".equals(asset)) continue;
                     double netRate = getNetRate(asset, dcNet);
-                    double bal = getBalance(dc, nisa, other, asset);
+                    double bal = getBalance(nisa, other, asset);
                     if (bal <= 0) continue;
 
                     double grossNeeded = remaining / netRate;
-                    double withdrawn   = Math.min(grossNeeded, bal);
-                    double received    = withdrawn * netRate;
+                    double withdrawn = Math.min(grossNeeded, bal);
+                    double received = withdrawn * netRate;
 
                     switch (asset) {
-                        case "DC"    -> dc    -= withdrawn;
-                        case "NISA"  -> nisa  -= withdrawn;
+                        case "NASDAQ" -> nisa -= withdrawn;
                         case "OTHER" -> other -= withdrawn;
                     }
-                    income    += received;
+                    income += received;
                     remaining -= received;
                 }
             }
 
-            // 年末運用（取り崩し後の残高に利回り適用）
-            dc    = Math.max(0, dc    * (1 + req.dcReturnRate));
-            nisa  = Math.max(0, nisa  * (1 + req.dcReturnRate));
+            nisa = Math.max(0, nisa * (1 + req.dcReturnRate));
             other = Math.max(0, other * (1 + req.dcReturnRate));
 
-            double total = dc + nisa + other;
+            double total = nisa + other;
+
+            if (dcAnnuityStarted) {
+                total += dcRemainingForAnnuity;
+            }
 
             if (total == 0 && depletionAge == null) {
                 depletionAge = age;
             }
 
             YearResult yr = new YearResult();
-            yr.age           = age;
-            yr.income        = Math.round(income);
-            yr.expense       = Math.round(yearlyExpense);
-            yr.dcBalance     = Math.round(dc);
-            yr.nisaBalance   = Math.round(nisa);
-            yr.otherBalance  = Math.round(other);
-            yr.totalBalance  = Math.round(total);
+            yr.age = age;
+            yr.income = Math.round(income);
+            yr.expense = Math.round(yearlyExpense);
+            yr.dcBalance = Math.round(dcAnnuityStarted ? dcRemainingForAnnuity : dc);
+            yr.nisaBalance = Math.round(nisa);
+            yr.otherBalance = Math.round(other);
+            yr.totalBalance = Math.round(total);
             yr.specialExpense = Math.round(specialExp);
+            yr.dcWithdrawal = Math.round(dcWithdrawal);
+            yr.dcAnnuityPayment = Math.round(dcAnnuityStarted ? dcAnnuityPayment : 0);
             results.add(yr);
 
             inflationMult *= (1 + req.inflationRate);
-            if (age >= req.pensionStartAge) {
+            if (age >= req.publicPensionStartAge) {
                 pensionMult *= (1 + req.inflationRate * 0.8);
             }
         }
 
         SimulationResponse response = new SimulationResponse();
-        response.yearlyResults      = results;
-        response.assetDepletionAge  = (depletionAge == null) ? -1 : depletionAge;
+        response.yearlyResults = results;
+        response.assetDepletionAge = (depletionAge == null) ? -1 : depletionAge;
         response.failureProbability = calculateFailureProbability(req);
 
         return response;
     }
 
-    // ---- モンテカルロ（10,000回） ----------------------------------------
-
     private double calculateFailureProbability(SimulationRequest req) {
 
-        // リクエストの手取り率を優先、null の場合はデフォルト定数にフォールバック
-        final double salaryNet  = req.salaryNetRate  != null ? req.salaryNetRate  : SALARY_NET_RATE;
+        final double salaryNet = req.salaryNetRate != null ? req.salaryNetRate : SALARY_NET_RATE;
         final double pensionNet = req.pensionNetRate != null ? req.pensionNetRate : PENSION_NET_RATE;
-        final double dcNet      = req.dcNetRate      != null ? req.dcNetRate      : DC_NET_RATE;
+        final double dcNet = req.dcNetRate != null ? req.dcNetRate : DC_NET_RATE;
 
-        int simulations  = 10_000;
+        int simulations = 10_000;
         int failureCount = 0;
         Random rand = new Random();
-        List<String> order = resolveOrder(req.withdrawalOrder);
+
+        int dcStartAge = (int)(req.dcStartAge != 0 ? req.dcStartAge : DEFAULT_DC_START_AGE);
+        List<String> order = resolveOrder(req.withdrawalOrder, dcStartAge);
 
         for (int i = 0; i < simulations; i++) {
 
-            double dc    = req.dcBalance;
-            double nisa  = req.nisaBalance;
-            double other = req.otherBalance;
+            double dc = req.dcBalance;
+            double nisa = req.nisaBalance != 0 ? req.nisaBalance : DEFAULT_NISA_BALANCE;
+            double other = req.otherBalance != 0 ? req.otherBalance : DEFAULT_OTHER_BALANCE;
+
+            double dcLumpSum = req.dcLumpSumAmount;
+            int dcAnnuityYears = req.dcAnnuityYears > 0 ? req.dcAnnuityYears : DEFAULT_DC_ANNUITY_YEARS;
 
             double inflationMult = 1.0;
-            double pensionMult   = 1.0;
+            double pensionMult = 1.0;
+
+            double dcRemainingForAnnuity = 0;
+            double dcAnnuityPayment = 0;
+            boolean dcAnnuityStarted = false;
 
             for (int age = req.startAge; age <= req.lifeExpectancy; age++) {
 
@@ -163,14 +204,41 @@ public class SimulationService {
                 double yearlyExpense =
                     (req.basicLivingCost + req.leisureCost) * 12 * inflationMult;
 
-                // 特別支出をモンテカルロにも反映
                 yearlyExpense += calcSpecialExpense(req, age);
 
                 if (age < req.retirementAge) {
                     income += req.salaryAfter60 * 12 * salaryNet * inflationMult;
                 }
-                if (age >= req.pensionStartAge) {
+                if (age >= req.publicPensionStartAge) {
                     income += req.publicPension * 12 * pensionMult * pensionNet;
+                }
+
+                if (age >= dcStartAge && dc > 0) {
+                    if (!dcAnnuityStarted) {
+                        if (dcLumpSum > 0) {
+                            double withdraw = Math.min(dcLumpSum, dc);
+                            dc -= withdraw;
+                            income += withdraw * dcNet;
+                        }
+
+                        double remainingForAnnuity = dc;
+                        if (remainingForAnnuity > 0 && dcAnnuityYears > 0) {
+                            dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcNet;
+                            dcRemainingForAnnuity = remainingForAnnuity;
+                            dcAnnuityStarted = true;
+                        }
+                        dc = 0;
+                    }
+
+                    if (dcAnnuityStarted && dcAnnuityYears > 0) {
+                        int yearsPassed = age - dcStartAge;
+                        if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
+                            double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity * (1 + req.dcReturnRate));
+                            income += payment;
+                            dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
+                            dcAnnuityPayment = dcRemainingForAnnuity / (dcAnnuityYears - yearsPassed) * dcNet;
+                        }
+                    }
                 }
 
                 double shortfall = yearlyExpense - income;
@@ -179,39 +247,40 @@ public class SimulationService {
                     double remaining = shortfall;
                     for (String asset : order) {
                         if (remaining <= 0) break;
-                        // DC は 60 歳未満では受け取り不可（法律上の制約）
-                        if ("DC".equals(asset) && age < DC_MIN_WITHDRAW_AGE) continue;
+                        if ("DC".equals(asset)) continue;
                         double netRate = getNetRate(asset, dcNet);
-                        double bal = getBalance(dc, nisa, other, asset);
+                        double bal = getBalance(nisa, other, asset);
                         if (bal <= 0) continue;
 
                         double grossNeeded = remaining / netRate;
-                        double withdrawn   = Math.min(grossNeeded, bal);
-                        double received    = withdrawn * netRate;
+                        double withdrawn = Math.min(grossNeeded, bal);
+                        double received = withdrawn * netRate;
 
                         switch (asset) {
-                            case "DC"    -> dc    -= withdrawn;
-                            case "NISA"  -> nisa  -= withdrawn;
+                            case "NASDAQ" -> nisa -= withdrawn;
                             case "OTHER" -> other -= withdrawn;
                         }
                         remaining -= received;
                     }
                 }
 
-                // 年末運用（ランダム利回り）
                 double randomReturn = req.dcReturnRate
                     + req.returnVolatility * rand.nextGaussian();
-                dc    = Math.max(0, dc    * (1 + randomReturn));
-                nisa  = Math.max(0, nisa  * (1 + randomReturn));
+                nisa = Math.max(0, nisa * (1 + randomReturn));
                 other = Math.max(0, other * (1 + randomReturn));
 
-                if (dc + nisa + other <= 0) {
+                double total = nisa + other;
+                if (dcAnnuityStarted) {
+                    total += dcRemainingForAnnuity;
+                }
+
+                if (total <= 0) {
                     failureCount++;
                     break;
                 }
 
                 inflationMult *= (1 + req.inflationRate);
-                if (age >= req.pensionStartAge) {
+                if (age >= req.publicPensionStartAge) {
                     pensionMult *= (1 + req.inflationRate * 0.8);
                 }
             }
@@ -220,9 +289,6 @@ public class SimulationService {
         return (double) failureCount / simulations;
     }
 
-    // ---- ヘルパー --------------------------------------------------------
-
-    /** 指定年齢に該当する特別支出の合計を返す */
     private double calcSpecialExpense(SimulationRequest req, int age) {
         if (req.specialExpenses == null || req.specialExpenses.isEmpty()) return 0;
         double total = 0;
@@ -234,24 +300,28 @@ public class SimulationService {
         return total;
     }
 
-    private List<String> resolveOrder(List<String> order) {
-        if (order == null || order.isEmpty()) return DEFAULT_ORDER;
-        return order;
+    private List<String> resolveOrder(List<String> order, int dcStartAge) {
+        if (order == null || order.isEmpty()) {
+            return List.of("NASDAQ", "OTHER");
+        }
+        return order.stream()
+            .filter(s -> !s.equals("DC"))
+            .toList();
     }
 
     private double getNetRate(String asset, double dcNetRate) {
         return switch (asset) {
-            case "NISA"  -> NISA_NET_RATE;
+            case "NASDAQ" -> NISA_NET_RATE;
             case "OTHER" -> OTHER_NET_RATE;
-            default      -> dcNetRate;   // DC: ユーザー指定またはデフォルト
+            default -> dcNetRate;
         };
     }
 
-    private double getBalance(double dc, double nisa, double other, String asset) {
+    private double getBalance(double nisa, double other, String asset) {
         return switch (asset) {
-            case "NISA"  -> nisa;
+            case "NASDAQ" -> nisa;
             case "OTHER" -> other;
-            default      -> dc;
+            default -> 0;
         };
     }
 }
