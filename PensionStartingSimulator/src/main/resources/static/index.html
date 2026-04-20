@@ -349,7 +349,7 @@ tr:hover { background: #f7f9fc; }
       <span class="error-msg" id="err-retirementAge"></span>
     </div>
     <div class="form-item">
-      <label for="pensionStartAge">年金開始年齢</label>
+      <label for="pensionStartAge">公的年金開始年齢</label>
       <input type="number" id="pensionStartAge" value="65" min="60" max="75" onchange="validateInputs();">
       <span class="error-msg" id="err-pensionStartAge"></span>
     </div>
@@ -393,7 +393,7 @@ tr:hover { background: #f7f9fc; }
   <h3>収入</h3>
   <div class="form-grid">
     <div class="form-item">
-      <label for="salaryAfter60" id="salaryLabel">60歳以降給与（月）</label>
+      <label for="salaryAfter60" id="salaryLabel">給与（月）</label>
       <input type="text" id="salaryAfter60" value="300,000" onblur="formatNumber(this)">
     </div>
     <div class="form-item">
@@ -412,16 +412,16 @@ tr:hover { background: #f7f9fc; }
   <div class="form-grid">
     <div class="form-item">
       <label for="dcBalance">DC（確定拠出年金）残高</label>
-      <input type="text" id="dcBalance" value="20,000,000" onblur="formatNumber(this)">
+      <input type="text" id="dcBalance" value="10,000,000" onblur="formatNumber(this)">
       <span style="font-size:0.74rem;color:#e67e22;margin-top:2px;">⚠️ DCは法律上60歳未満では受け取り不可。開始年齢が60歳未満の場合、60歳まで取り崩しに使われません。</span>
     </div>
     <div class="form-item">
       <label for="nisaBalance">NISA残高</label>
-      <input type="text" id="nisaBalance" value="0" onblur="formatNumber(this)">
+      <input type="text" id="nisaBalance" value="5,000,000" onblur="formatNumber(this)">
     </div>
     <div class="form-item">
       <label for="otherBalance">その他金融資産残高</label>
-      <input type="text" id="otherBalance" value="0" onblur="formatNumber(this)">
+      <input type="text" id="otherBalance" value="5,000,000" onblur="formatNumber(this)">
     </div>
     <div class="form-item" style="grid-column: 1 / -1;">
       <label>想定利回り（全資産共通）</label>
@@ -530,7 +530,7 @@ function validateInputs() {
     document.getElementById('err-' + id).textContent = '';
   });
   if (retireAge < startAge)  { errors.push("退職年齢は開始年齢以上にしてください。"); setFieldError('retirementAge', '開始年齢より小さい値は無効です'); }
-  if (pensionAge < startAge) { errors.push("年金開始年齢は開始年齢以上にしてください。"); setFieldError('pensionStartAge', '開始年齢より小さい値は無効です'); }
+  if (pensionAge < startAge) { errors.push("公的年金開始年齢は開始年齢以上にしてください。"); setFieldError('pensionStartAge', '開始年齢より小さい値は無効です'); }
   if (lifeExp <= startAge)   { errors.push("想定寿命は開始年齢より大きくしてください。"); setFieldError('lifeExpectancy', '開始年齢より大きい値にしてください'); }
   if (pensionAge > lifeExp)  { errors.push("年金開始年齢が想定寿命を超えています。"); setFieldError('pensionStartAge', '想定寿命以下にしてください'); }
   const banner = document.getElementById('validationError');
