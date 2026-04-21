@@ -413,7 +413,26 @@ tr:hover { background: #f7f9fc; }
     <div class="form-item">
       <label for="dcBalance">DC（確定拠出年金）残高</label>
       <input type="text" id="dcBalance" value="10,000,000" onblur="formatNumber(this)">
-      <span style="font-size:0.74rem;color:#e67e22;margin-top:2px;">⚠️ DCは法律上60歳未満では受け取り不可。開始年齢が60歳未満の場合、60歳まで取り崩しに使われません。</span>
+    </div>
+    <div class="form-item">
+      <label for="dcStartAge">DC受取開始年齢
+        <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:4px;">60〜75歳（法律上の制約）</span>
+      </label>
+      <input type="number" id="dcStartAge" value="60" min="60" max="75" onchange="validateInputs();">
+      <span class="error-msg" id="err-dcStartAge"></span>
+    </div>
+    <div class="form-item">
+      <label for="dcLumpSum">DC一時金受取額
+        <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:4px;">0の場合は全額年金受取</span>
+      </label>
+      <input type="text" id="dcLumpSum" value="0" onblur="formatNumber(this)">
+    </div>
+    <div class="form-item">
+      <label for="dcAnnuityYears">DC年金受取期間（年）
+        <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:4px;">5〜20年（制度上の制約）</span>
+      </label>
+      <input type="number" id="dcAnnuityYears" value="20" min="5" max="20" onchange="validateInputs();">
+      <span class="error-msg" id="err-dcAnnuityYears"></span>
     </div>
     <div class="form-item">
       <label for="nisaBalance">NISA残高</label>
@@ -444,14 +463,8 @@ tr:hover { background: #f7f9fc; }
 <div class="section">
   <h3>取り崩し順序</h3>
   <div class="order-container">
-    <div class="order-hint">⠿ ドラッグして順序を変更できます。上から順に取り崩します（DCを先に使い切る、NISAは残したいなど）</div>
+    <div class="order-hint">⠿ ドラッグして順序を変更できます。上から順に取り崩します（NISAを最後まで残したいなど）。DCは上の設定した受取開始年齢から自動受取となるため、ここでの順序には影響しません。</div>
     <div class="order-list" id="orderList">
-      <div class="order-item" draggable="true" data-asset="DC">
-        <span class="drag-handle">⠿</span>
-        <span class="order-rank rank-1" id="rank-DC">1</span>
-        <span class="order-name">DC（確定拠出年金）</span>
-        <span class="tax-badge badge-dc">課税10%</span>
-      </div>
       <div class="order-item" draggable="true" data-asset="NISA">
         <span class="drag-handle">⠿</span>
         <span class="order-rank rank-2" id="rank-NISA">2</span>
@@ -520,12 +533,14 @@ function toManEn(v) { return Math.round(v / 10000).toLocaleString() + "万円"; 
 
 /* ===== バリデーション ===== */
 function validateInputs() {
-  const startAge   = Number(document.getElementById('startAge').value);
-  const lifeExp    = Number(document.getElementById('lifeExpectancy').value);
-  const retireAge  = Number(document.getElementById('retirementAge').value);
-  const pensionAge = Number(document.getElementById('pensionStartAge').value);
+  const startAge          = Number(document.getElementById('startAge').value);
+  const lifeExp           = Number(document.getElementById('lifeExpectancy').value);
+  const retireAge         = Number(document.getElementById('retirementAge').value);
+  const pensionAge        = Number(document.getElementById('pensionStartAge').value);
+  const dcStartAgeVal     = Number(document.getElementById('dcStartAge').value);
+  const dcAnnuityYearsVal = Number(document.getElementById('dcAnnuityYears').value);
   const errors = [];
-  ['startAge','lifeExpectancy','retirementAge','pensionStartAge'].forEach(id => {
+  ['startAge','lifeExpectancy','retirementAge','pensionStartAge','dcStartAge','dcAnnuityYears'].forEach(id => {
     document.getElementById(id).classList.remove('input-error');
     document.getElementById('err-' + id).textContent = '';
   });
@@ -533,6 +548,8 @@ function validateInputs() {
   if (pensionAge < startAge) { errors.push("公的年金開始年齢は開始年齢以上にしてください。"); setFieldError('pensionStartAge', '開始年齢より小さい値は無効です'); }
   if (lifeExp <= startAge)   { errors.push("想定寿命は開始年齢より大きくしてください。"); setFieldError('lifeExpectancy', '開始年齢より大きい値にしてください'); }
   if (pensionAge > lifeExp)  { errors.push("年金開始年齢が想定寿命を超えています。"); setFieldError('pensionStartAge', '想定寿命以下にしてください'); }
+  if (dcStartAgeVal < 60 || dcStartAgeVal > 75) { errors.push("DC受取開始年齢は60〜75歳で設定してください。"); setFieldError('dcStartAge', '60〜75歳の範囲で入力してください'); }
+  if (dcAnnuityYearsVal < 5 || dcAnnuityYearsVal > 20) { errors.push("DC年金受取期間は5〜20年で設定してください。"); setFieldError('dcAnnuityYears', '5〜20年の範囲で入力してください'); }
   const banner = document.getElementById('validationError');
   const btn    = document.getElementById('simulateBtn');
   if (errors.length > 0) {
@@ -609,6 +626,9 @@ async function runSimulation() {
     salaryAfter60:   removeComma(document.getElementById('salaryAfter60').value),
     publicPension:   removeComma(document.getElementById('publicPension').value),
     dcBalance:       removeComma(document.getElementById('dcBalance').value),
+    dcStartAge:      Number(document.getElementById('dcStartAge').value),
+    dcLumpSumAmount: removeComma(document.getElementById('dcLumpSum').value || '0'),
+    dcAnnuityYears:  Number(document.getElementById('dcAnnuityYears').value),
     nisaBalance:     removeComma(document.getElementById('nisaBalance').value),
     otherBalance:    removeComma(document.getElementById('otherBalance').value),
     inflationRate:   Number(document.getElementById('inflationRate').value),

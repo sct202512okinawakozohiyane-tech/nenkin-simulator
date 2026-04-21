@@ -96,7 +96,7 @@ public class SimulationService {
                 if (dcAnnuityStarted && dcAnnuityYears > 0) {
                     int yearsPassed = age - dcStartAge;
                     if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
-                        double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity * (1 + req.dcReturnRate));
+                        double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
                         income += payment;
                         dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
                         dcAnnuityPayment = dcRemainingForAnnuity / (dcAnnuityYears - yearsPassed) * dcNet;
@@ -131,6 +131,9 @@ public class SimulationService {
 
             nisa = Math.max(0, nisa * (1 + req.dcReturnRate));
             other = Math.max(0, other * (1 + req.dcReturnRate));
+            if (dcAnnuityStarted) {
+                dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity * (1 + req.dcReturnRate));
+            }
 
             double total = nisa + other;
 
@@ -233,7 +236,7 @@ public class SimulationService {
                     if (dcAnnuityStarted && dcAnnuityYears > 0) {
                         int yearsPassed = age - dcStartAge;
                         if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
-                            double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity * (1 + req.dcReturnRate));
+                            double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
                             income += payment;
                             dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
                             dcAnnuityPayment = dcRemainingForAnnuity / (dcAnnuityYears - yearsPassed) * dcNet;
@@ -268,6 +271,9 @@ public class SimulationService {
                     + req.returnVolatility * rand.nextGaussian();
                 nisa = Math.max(0, nisa * (1 + randomReturn));
                 other = Math.max(0, other * (1 + randomReturn));
+                if (dcAnnuityStarted) {
+                    dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity * (1 + req.dcReturnRate));
+                }
 
                 double total = nisa + other;
                 if (dcAnnuityStarted) {
