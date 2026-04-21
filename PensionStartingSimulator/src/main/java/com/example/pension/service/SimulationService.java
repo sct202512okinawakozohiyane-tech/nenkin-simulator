@@ -36,8 +36,8 @@ public class SimulationService {
         final double dcNet = req.dcNetRate != null ? req.dcNetRate : DC_NET_RATE;
 
         double dc = req.dcBalance;
-        double nisa = req.nisaBalance != 0 ? req.nisaBalance : DEFAULT_NISA_BALANCE;
-        double other = req.otherBalance != 0 ? req.otherBalance : DEFAULT_OTHER_BALANCE;
+        double nisa = req.nisaBalance;
+        double other = req.otherBalance;
 
         int dcStartAge = (int)(req.dcStartAge != 0 ? req.dcStartAge : DEFAULT_DC_START_AGE);
         double dcLumpSum = req.dcLumpSumAmount;
@@ -75,33 +75,32 @@ public class SimulationService {
 
             double dcWithdrawal = 0;
 
-            if (age >= dcStartAge && dc > 0) {
-                if (!dcAnnuityStarted) {
-                    if (dcLumpSum > 0) {
-                        double withdraw = Math.min(dcLumpSum, dc);
-                        dc -= withdraw;
-                        income += withdraw * dcNet;
-                        dcWithdrawal += withdraw;
-                    }
-
-                    double remainingForAnnuity = dc;
-                    if (remainingForAnnuity > 0 && dcAnnuityYears > 0) {
-                        dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcNet;
-                        dcRemainingForAnnuity = remainingForAnnuity;
-                        dcAnnuityStarted = true;
-                    }
-                    dc = 0;
+            if (age >= dcStartAge && dc > 0 && !dcAnnuityStarted) {
+                if (dcLumpSum > 0) {
+                    double withdraw = Math.min(dcLumpSum, dc);
+                    dc -= withdraw;
+                    income += withdraw * dcNet;
+                    dcWithdrawal += withdraw;
                 }
 
-                if (dcAnnuityStarted && dcAnnuityYears > 0) {
-                    int yearsPassed = age - dcStartAge;
-                    if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
-                        double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
-                        income += payment;
-                        dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
-                        dcAnnuityPayment = dcRemainingForAnnuity / (dcAnnuityYears - yearsPassed) * dcNet;
-                        dcWithdrawal += payment / dcNet;
-                    }
+                double remainingForAnnuity = dc;
+                if (remainingForAnnuity > 0 && dcAnnuityYears > 0) {
+                    dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcNet;
+                    dcRemainingForAnnuity = remainingForAnnuity;
+                    dcAnnuityStarted = true;
+                }
+                dc = 0;
+            }
+
+            if (dcAnnuityStarted && dcAnnuityYears > 0) {
+                int yearsPassed = age - dcStartAge;
+                if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
+                    double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
+                    income += payment;
+                    dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
+                    int yearsRemaining = dcAnnuityYears - yearsPassed - 1;
+                    dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcNet : 0;
+                    dcWithdrawal += payment / dcNet;
                 }
             }
 
@@ -188,8 +187,8 @@ public class SimulationService {
         for (int i = 0; i < simulations; i++) {
 
             double dc = req.dcBalance;
-            double nisa = req.nisaBalance != 0 ? req.nisaBalance : DEFAULT_NISA_BALANCE;
-            double other = req.otherBalance != 0 ? req.otherBalance : DEFAULT_OTHER_BALANCE;
+            double nisa = req.nisaBalance;
+            double other = req.otherBalance;
 
             double dcLumpSum = req.dcLumpSumAmount;
             int dcAnnuityYears = req.dcAnnuityYears > 0 ? req.dcAnnuityYears : DEFAULT_DC_ANNUITY_YEARS;
@@ -216,31 +215,30 @@ public class SimulationService {
                     income += req.publicPension * 12 * pensionMult * pensionNet;
                 }
 
-                if (age >= dcStartAge && dc > 0) {
-                    if (!dcAnnuityStarted) {
-                        if (dcLumpSum > 0) {
-                            double withdraw = Math.min(dcLumpSum, dc);
-                            dc -= withdraw;
-                            income += withdraw * dcNet;
-                        }
-
-                        double remainingForAnnuity = dc;
-                        if (remainingForAnnuity > 0 && dcAnnuityYears > 0) {
-                            dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcNet;
-                            dcRemainingForAnnuity = remainingForAnnuity;
-                            dcAnnuityStarted = true;
-                        }
-                        dc = 0;
+                if (age >= dcStartAge && dc > 0 && !dcAnnuityStarted) {
+                    if (dcLumpSum > 0) {
+                        double withdraw = Math.min(dcLumpSum, dc);
+                        dc -= withdraw;
+                        income += withdraw * dcNet;
                     }
 
-                    if (dcAnnuityStarted && dcAnnuityYears > 0) {
-                        int yearsPassed = age - dcStartAge;
-                        if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
-                            double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
-                            income += payment;
-                            dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
-                            dcAnnuityPayment = dcRemainingForAnnuity / (dcAnnuityYears - yearsPassed) * dcNet;
-                        }
+                    double remainingForAnnuity = dc;
+                    if (remainingForAnnuity > 0 && dcAnnuityYears > 0) {
+                        dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcNet;
+                        dcRemainingForAnnuity = remainingForAnnuity;
+                        dcAnnuityStarted = true;
+                    }
+                    dc = 0;
+                }
+
+                if (dcAnnuityStarted && dcAnnuityYears > 0) {
+                    int yearsPassed = age - dcStartAge;
+                    if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
+                        double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
+                        income += payment;
+                        dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
+                        int yearsRemaining = dcAnnuityYears - yearsPassed - 1;
+                        dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcNet : 0;
                     }
                 }
 
