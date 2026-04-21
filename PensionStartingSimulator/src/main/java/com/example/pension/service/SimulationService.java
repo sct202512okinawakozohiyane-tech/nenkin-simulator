@@ -95,12 +95,21 @@ public class SimulationService {
             if (dcAnnuityStarted && dcAnnuityYears > 0) {
                 int yearsPassed = age - dcStartAge;
                 if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
-                    double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
+                    double payment;
+                    if (yearsPassed == dcAnnuityYears - 1) {
+                        // 最終年：利回り分も含めて全額払い出し
+                        payment = dcRemainingForAnnuity * dcNet;
+                        dcWithdrawal += dcRemainingForAnnuity;
+                        dcRemainingForAnnuity = 0;
+                        dcAnnuityPayment = 0;
+                    } else {
+                        payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
+                        dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
+                        int yearsRemaining = dcAnnuityYears - yearsPassed - 1;
+                        dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcNet : 0;
+                        dcWithdrawal += payment / dcNet;
+                    }
                     income += payment;
-                    dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
-                    int yearsRemaining = dcAnnuityYears - yearsPassed - 1;
-                    dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcNet : 0;
-                    dcWithdrawal += payment / dcNet;
                 }
             }
 
@@ -156,6 +165,12 @@ public class SimulationService {
             yr.dcWithdrawal = Math.round(dcWithdrawal);
             yr.dcAnnuityPayment = Math.round(dcAnnuityStarted ? dcAnnuityPayment : 0);
             results.add(yr);
+
+            // 余剰収入（収入 > 支出）は翌年のその他残高へ加算
+            double surplus = income - yearlyExpense;
+            if (surplus > 0) {
+                other += surplus;
+            }
 
             inflationMult *= (1 + req.inflationRate);
             if (age >= req.publicPensionStartAge) {
@@ -234,11 +249,19 @@ public class SimulationService {
                 if (dcAnnuityStarted && dcAnnuityYears > 0) {
                     int yearsPassed = age - dcStartAge;
                     if (yearsPassed < dcAnnuityYears && dcRemainingForAnnuity > 0) {
-                        double payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
+                        double payment;
+                        if (yearsPassed == dcAnnuityYears - 1) {
+                            // 最終年：利回り分も含めて全額払い出し
+                            payment = dcRemainingForAnnuity * dcNet;
+                            dcRemainingForAnnuity = 0;
+                            dcAnnuityPayment = 0;
+                        } else {
+                            payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
+                            dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
+                            int yearsRemaining = dcAnnuityYears - yearsPassed - 1;
+                            dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcNet : 0;
+                        }
                         income += payment;
-                        dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
-                        int yearsRemaining = dcAnnuityYears - yearsPassed - 1;
-                        dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcNet : 0;
                     }
                 }
 
@@ -263,6 +286,12 @@ public class SimulationService {
                         }
                         remaining -= received;
                     }
+                }
+
+                // 余剰収入（収入 > 支出）は翌年のその他残高へ加算
+                double surplus = income - yearlyExpense;
+                if (surplus > 0) {
+                    other += surplus;
                 }
 
                 double randomReturn = req.dcReturnRate
