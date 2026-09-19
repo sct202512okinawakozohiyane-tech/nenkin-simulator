@@ -34,7 +34,7 @@ class SimulationServiceTest {
         req.startAge         = startAge;
         req.lifeExpectancy   = 90;
         req.retirementAge    = 65;
-        req.pensionStartAge  = 65;
+        req.publicPensionStartAge = 65;
         req.basicLivingCost  = 200_000;
         req.leisureCost      = 100_000;
         req.salaryAfter60    = 0;
@@ -67,7 +67,7 @@ class SimulationServiceTest {
         req.startAge        = startAge;
         req.lifeExpectancy  = lifeExpectancy;
         req.retirementAge   = retirementAge;
-        req.pensionStartAge = pensionStartAge;
+        req.publicPensionStartAge = pensionStartAge;
 
         // 生活費・娯楽費（月額）
         req.basicLivingCost = 50_000 + rng.nextInt(451) * 1_000;  // 5万〜50万
@@ -90,7 +90,8 @@ class SimulationServiceTest {
         // 手取り率
         req.salaryNetRate  = 0.70 + rng.nextDouble() * 0.15;        // 70〜85%
         req.pensionNetRate = 0.70 + rng.nextDouble() * 0.29;        // 70〜99%
-        req.dcNetRate      = 0.70 + rng.nextDouble() * 0.29;        // 70〜99%
+        req.dcLumpSumNetRate = 0.70 + rng.nextDouble() * 0.29;      // 70〜99%
+        req.dcAnnuityNetRate = 0.70 + rng.nextDouble() * 0.29;      // 70〜99%
 
         // 取り崩し順序（ランダムに並び替え）
         List<String> order = new ArrayList<>(List.of("DC", "NISA", "OTHER"));
@@ -169,14 +170,14 @@ class SimulationServiceTest {
                     + "\n  startAge=" + req.startAge
                     + ", lifeExpectancy=" + req.lifeExpectancy
                     + ", retirementAge=" + req.retirementAge
-                    + ", pensionStartAge=" + req.pensionStartAge);
+                    + ", pensionStartAge=" + req.publicPensionStartAge);
                 return;
             }
 
             String ctx = String.format(
                 "Trial %d (startAge=%d, lifeExp=%d, retire=%d, pension=%d, dcReturn=%.3f, inflation=%.3f)",
                 trial, req.startAge, req.lifeExpectancy, req.retirementAge,
-                req.pensionStartAge, req.dcReturnRate, req.inflationRate);
+                req.publicPensionStartAge, req.dcReturnRate, req.inflationRate);
 
             // I3: 行数チェック
             int expectedRows = req.lifeExpectancy - req.startAge + 1;

@@ -17,7 +17,8 @@ public class SimulationService {
     private static final double SALARY_NET_RATE = 0.8;
     private static final double PENSION_NET_RATE = 0.9;
 
-    private static final double DC_NET_RATE = 0.9;
+    private static final double DC_LUMP_SUM_NET_RATE = 0.95; // 退職所得控除＋1/2課税により優遇が大きい
+    private static final double DC_ANNUITY_NET_RATE = 0.85;  // 公的年金と合算のうえ累進課税されるため一時金より低め
     private static final double NISA_NET_RATE = 1.0;
     private static final double OTHER_NET_RATE = 0.8;
     private static final int DC_MIN_WITHDRAW_AGE = 60;
@@ -33,7 +34,8 @@ public class SimulationService {
 
         final double salaryNet = req.salaryNetRate != null ? req.salaryNetRate : SALARY_NET_RATE;
         final double pensionNet = req.pensionNetRate != null ? req.pensionNetRate : PENSION_NET_RATE;
-        final double dcNet = req.dcNetRate != null ? req.dcNetRate : DC_NET_RATE;
+        final double dcLumpSumNet = req.dcLumpSumNetRate != null ? req.dcLumpSumNetRate : DC_LUMP_SUM_NET_RATE;
+        final double dcAnnuityNet = req.dcAnnuityNetRate != null ? req.dcAnnuityNetRate : DC_ANNUITY_NET_RATE;
 
         double dc = req.dcBalance;
         double nisa = req.nisaBalance;
@@ -79,13 +81,13 @@ public class SimulationService {
                 if (dcLumpSum > 0) {
                     double withdraw = Math.min(dcLumpSum, dc);
                     dc -= withdraw;
-                    income += withdraw * dcNet;
+                    income += withdraw * dcLumpSumNet;
                     dcWithdrawal += withdraw;
                 }
 
                 double remainingForAnnuity = dc;
                 if (remainingForAnnuity > 0 && dcAnnuityYears > 0) {
-                    dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcNet;
+                    dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcAnnuityNet;
                     dcRemainingForAnnuity = remainingForAnnuity;
                     dcAnnuityStarted = true;
                 }
@@ -98,16 +100,16 @@ public class SimulationService {
                     double payment;
                     if (yearsPassed == dcAnnuityYears - 1) {
                         // 最終年：利回り分も含めて全額払い出し
-                        payment = dcRemainingForAnnuity * dcNet;
+                        payment = dcRemainingForAnnuity * dcAnnuityNet;
                         dcWithdrawal += dcRemainingForAnnuity;
                         dcRemainingForAnnuity = 0;
                         dcAnnuityPayment = 0;
                     } else {
                         payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
-                        dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
+                        dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcAnnuityNet);
                         int yearsRemaining = dcAnnuityYears - yearsPassed - 1;
-                        dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcNet : 0;
-                        dcWithdrawal += payment / dcNet;
+                        dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcAnnuityNet : 0;
+                        dcWithdrawal += payment / dcAnnuityNet;
                     }
                     income += payment;
                 }
@@ -120,7 +122,7 @@ public class SimulationService {
                 for (String asset : order) {
                     if (remaining <= 0) break;
                     if ("DC".equals(asset)) continue;
-                    double netRate = getNetRate(asset, dcNet);
+                    double netRate = getNetRate(asset, dcAnnuityNet);
                     double bal = getBalance(nisa, other, asset);
                     if (bal <= 0) continue;
 
@@ -190,7 +192,8 @@ public class SimulationService {
 
         final double salaryNet = req.salaryNetRate != null ? req.salaryNetRate : SALARY_NET_RATE;
         final double pensionNet = req.pensionNetRate != null ? req.pensionNetRate : PENSION_NET_RATE;
-        final double dcNet = req.dcNetRate != null ? req.dcNetRate : DC_NET_RATE;
+        final double dcLumpSumNet = req.dcLumpSumNetRate != null ? req.dcLumpSumNetRate : DC_LUMP_SUM_NET_RATE;
+        final double dcAnnuityNet = req.dcAnnuityNetRate != null ? req.dcAnnuityNetRate : DC_ANNUITY_NET_RATE;
 
         int simulations = 10_000;
         int failureCount = 0;
@@ -234,12 +237,12 @@ public class SimulationService {
                     if (dcLumpSum > 0) {
                         double withdraw = Math.min(dcLumpSum, dc);
                         dc -= withdraw;
-                        income += withdraw * dcNet;
+                        income += withdraw * dcLumpSumNet;
                     }
 
                     double remainingForAnnuity = dc;
                     if (remainingForAnnuity > 0 && dcAnnuityYears > 0) {
-                        dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcNet;
+                        dcAnnuityPayment = remainingForAnnuity / dcAnnuityYears * dcAnnuityNet;
                         dcRemainingForAnnuity = remainingForAnnuity;
                         dcAnnuityStarted = true;
                     }
@@ -252,14 +255,14 @@ public class SimulationService {
                         double payment;
                         if (yearsPassed == dcAnnuityYears - 1) {
                             // 最終年：利回り分も含めて全額払い出し
-                            payment = dcRemainingForAnnuity * dcNet;
+                            payment = dcRemainingForAnnuity * dcAnnuityNet;
                             dcRemainingForAnnuity = 0;
                             dcAnnuityPayment = 0;
                         } else {
                             payment = Math.min(dcAnnuityPayment, dcRemainingForAnnuity);
-                            dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcNet);
+                            dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity - payment / dcAnnuityNet);
                             int yearsRemaining = dcAnnuityYears - yearsPassed - 1;
-                            dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcNet : 0;
+                            dcAnnuityPayment = yearsRemaining > 0 ? dcRemainingForAnnuity / yearsRemaining * dcAnnuityNet : 0;
                         }
                         income += payment;
                     }
@@ -272,7 +275,7 @@ public class SimulationService {
                     for (String asset : order) {
                         if (remaining <= 0) break;
                         if ("DC".equals(asset)) continue;
-                        double netRate = getNetRate(asset, dcNet);
+                        double netRate = getNetRate(asset, dcAnnuityNet);
                         double bal = getBalance(nisa, other, asset);
                         if (bal <= 0) continue;
 

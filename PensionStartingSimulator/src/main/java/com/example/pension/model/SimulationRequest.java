@@ -29,11 +29,12 @@ public class SimulationRequest {
 
     public List<String> withdrawalOrder;
 
-    // “Á•ÊxoƒŠƒXƒgiÅ‘å10Œj
+    // ï¿½ï¿½ï¿½Êxï¿½oï¿½ï¿½ï¿½Xï¿½gï¿½iï¿½Å‘ï¿½10ï¿½ï¿½ï¿½j
     public List<SpecialExpense> specialExpenses;
 
-    // ƒ†[ƒU[’²®‰Â”\‚Èèæ‚è—¦Bnull ‚Ìê‡‚ÍƒfƒtƒHƒ‹ƒg’l‚ğg—p
+    // ï¿½ï¿½ï¿½[ï¿½Uï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½Â”\ï¿½Èï¿½ï¿½è—¦ï¿½Bnull ï¿½Ìê‡ï¿½Íƒfï¿½tï¿½Hï¿½ï¿½ï¿½gï¿½lï¿½ï¿½ï¿½gï¿½p
     public Double salaryNetRate;
     public Double pensionNetRate;
-    public Double dcNetRate;
+    public Double dcLumpSumNetRate;
+    public Double dcAnnuityNetRate;
 }

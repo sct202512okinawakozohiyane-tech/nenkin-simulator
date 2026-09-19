@@ -276,7 +276,8 @@ tr:hover { background: #f7f9fc; }
   給与：<span id="prem-salary">80</span>%手取り ／
   公的年金：<span id="prem-pension">90</span>%手取り ／
   年金：マクロ経済スライド（インフレ×0.8）<br>
-  DC取り崩し：<span id="prem-dc">90</span>%手取り ／
+  DC一時金：<span id="prem-dc-lump">95</span>%手取り ／
+  DC年金：<span id="prem-dc-annuity">85</span>%手取り ／
   NISA取り崩し：非課税 ／
   その他金融資産取り崩し：80%手取り（20%源泉分離課税）
 </div>
@@ -314,13 +315,24 @@ tr:hover { background: #f7f9fc; }
         </div>
 
         <div class="form-item" style="grid-column:1/-1">
-          <label>DC取り崩し手取り率
-            <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:6px;">一時金受取は高め（退職所得控除大）・年金受取は低め（公的年金と合算課税）。</span>
+          <label>DC一時金手取り率
+            <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:6px;">退職所得控除＋1/2課税により優遇が大きい。</span>
           </label>
           <div class="slider-row">
-            <input type="range" id="dcNetRate" min="0.70" max="0.99" step="0.01" value="0.90"
+            <input type="range" id="dcLumpSumNetRate" min="0.70" max="0.99" step="0.01" value="0.95"
                    oninput="updateNetRateLabels()">
-            <span class="slider-val" id="dcNetLabel">90%</span>
+            <span class="slider-val" id="dcLumpSumNetLabel">95%</span>
+          </div>
+        </div>
+
+        <div class="form-item" style="grid-column:1/-1">
+          <label>DC年金手取り率
+            <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:6px;">公的年金と合算し累進課税されるため一時金より低めが目安。</span>
+          </label>
+          <div class="slider-row">
+            <input type="range" id="dcAnnuityNetRate" min="0.70" max="0.99" step="0.01" value="0.85"
+                   oninput="updateNetRateLabels()">
+            <span class="slider-val" id="dcAnnuityNetLabel">85%</span>
           </div>
         </div>
 
@@ -636,9 +648,10 @@ async function runSimulation() {
     returnVolatility:Number(document.getElementById('returnVolatility').value),
     withdrawalOrder: getWithdrawalOrder(),
     specialExpenses: getSpecialExpenses(),
-    salaryNetRate:   Number(document.getElementById('salaryNetRate').value),
-    pensionNetRate:  Number(document.getElementById('pensionNetRate').value),
-    dcNetRate:       Number(document.getElementById('dcNetRate').value)
+    salaryNetRate:      Number(document.getElementById('salaryNetRate').value),
+    pensionNetRate:     Number(document.getElementById('pensionNetRate').value),
+    dcLumpSumNetRate:   Number(document.getElementById('dcLumpSumNetRate').value),
+    dcAnnuityNetRate:   Number(document.getElementById('dcAnnuityNetRate').value)
   };
   try {
     const resp = await fetch('/api/simulate', {
@@ -853,16 +866,19 @@ function drawTable(data) {
 
 /* ===== 手取り率ラベル更新 ===== */
 function updateNetRateLabels() {
-  const s = Math.round(Number(document.getElementById('salaryNetRate').value)  * 100);
-  const p = Math.round(Number(document.getElementById('pensionNetRate').value) * 100);
-  const d = Math.round(Number(document.getElementById('dcNetRate').value)      * 100);
-  document.getElementById('salaryNetLabel').textContent  = s + '%';
-  document.getElementById('pensionNetLabel').textContent = p + '%';
-  document.getElementById('dcNetLabel').textContent      = d + '%';
+  const s  = Math.round(Number(document.getElementById('salaryNetRate').value)      * 100);
+  const p  = Math.round(Number(document.getElementById('pensionNetRate').value)     * 100);
+  const dl = Math.round(Number(document.getElementById('dcLumpSumNetRate').value)   * 100);
+  const da = Math.round(Number(document.getElementById('dcAnnuityNetRate').value)   * 100);
+  document.getElementById('salaryNetLabel').textContent    = s + '%';
+  document.getElementById('pensionNetLabel').textContent   = p + '%';
+  document.getElementById('dcLumpSumNetLabel').textContent = dl + '%';
+  document.getElementById('dcAnnuityNetLabel').textContent = da + '%';
   // 試算前提ボックスにリアルタイム反映
-  document.getElementById('prem-salary').textContent  = s;
-  document.getElementById('prem-pension').textContent = p;
-  document.getElementById('prem-dc').textContent      = d;
+  document.getElementById('prem-salary').textContent      = s;
+  document.getElementById('prem-pension').textContent     = p;
+  document.getElementById('prem-dc-lump').textContent     = dl;
+  document.getElementById('prem-dc-annuity').textContent  = da;
 }
 
 /* ===== 初期化 ===== */
