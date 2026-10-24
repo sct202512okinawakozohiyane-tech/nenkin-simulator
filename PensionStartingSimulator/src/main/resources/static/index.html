@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>年金資産シミュレーター</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"
+        integrity="sha384-Emf5ZVIUiarAdhkgtqK+5/Z5qIvM6QoVrS+qAVtfyZVuD5lIHrac0me485+Antp0"
+        crossorigin="anonymous"></script>
 <style>
 
 /* ===== リセット & ベース ===== */
@@ -346,8 +348,10 @@ tr:hover { background: #f7f9fc; }
   <h3>基本設定</h3>
   <div class="form-grid">
     <div class="form-item">
-      <label for="startAge">開始年齢</label>
-      <input type="number" id="startAge" value="60" min="40" max="80" onchange="updateDynamicLabels(); validateInputs();">
+      <label for="startAge">開始年齢
+        <span style="font-size:0.74rem;color:#999;font-weight:400;margin-left:4px;">60〜80歳（DCは60歳から受取可能なため）</span>
+      </label>
+      <input type="number" id="startAge" value="60" min="60" max="80" onchange="updateDynamicLabels(); validateInputs();">
       <span class="error-msg" id="err-startAge"></span>
     </div>
     <div class="form-item">
@@ -556,6 +560,10 @@ function validateInputs() {
     document.getElementById(id).classList.remove('input-error');
     document.getElementById('err-' + id).textContent = '';
   });
+  if (startAge < 60 || startAge > 80) { errors.push("開始年齢は60〜80歳で設定してください（DCは60歳から受取可能なため）。"); setFieldError('startAge', '60〜80歳の範囲で入力してください'); }
+  if (lifeExp < 60 || lifeExp > 110)  { errors.push("想定寿命は60〜110歳で設定してください。"); setFieldError('lifeExpectancy', '60〜110歳の範囲で入力してください'); }
+  if (retireAge < 40 || retireAge > 80) { errors.push("退職年齢は40〜80歳で設定してください。"); setFieldError('retirementAge', '40〜80歳の範囲で入力してください'); }
+  if (pensionAge < 60 || pensionAge > 75) { errors.push("公的年金開始年齢は60〜75歳で設定してください。"); setFieldError('pensionStartAge', '60〜75歳の範囲で入力してください'); }
   if (retireAge < startAge)  { errors.push("退職年齢は開始年齢以上にしてください。"); setFieldError('retirementAge', '開始年齢より小さい値は無効です'); }
   if (pensionAge < startAge) { errors.push("公的年金開始年齢は開始年齢以上にしてください。"); setFieldError('pensionStartAge', '開始年齢より小さい値は無効です'); }
   if (lifeExp <= startAge)   { errors.push("想定寿命は開始年齢より大きくしてください。"); setFieldError('lifeExpectancy', '開始年齢より大きい値にしてください'); }
@@ -632,7 +640,7 @@ async function runSimulation() {
     startAge:        Number(document.getElementById('startAge').value),
     lifeExpectancy:  lifeExp,
     retirementAge:   Number(document.getElementById('retirementAge').value),
-    pensionStartAge: Number(document.getElementById('pensionStartAge').value),
+    publicPensionStartAge: Number(document.getElementById('pensionStartAge').value),
     basicLivingCost: removeComma(document.getElementById('basicLivingCost').value),
     leisureCost:     removeComma(document.getElementById('leisureCost').value),
     salaryAfter60:   removeComma(document.getElementById('salaryAfter60').value),
@@ -658,7 +666,9 @@ async function runSimulation() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestData)
     });
-    if (!resp.ok) throw new Error('サーバーエラー: ' + resp.status);
+    if (!resp.ok) throw new Error(resp.status === 400
+      ? '入力値が許容範囲外です。年齢・金額・特別支出の値を確認してください。'
+      : 'サーバーエラー: ' + resp.status);
     const data = await resp.json();
     button.textContent = "シミュレーション実行";
     button.disabled = false;

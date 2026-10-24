@@ -141,15 +141,14 @@ public class SimulationService {
 
             nisa = Math.max(0, nisa * (1 + req.dcReturnRate));
             other = Math.max(0, other * (1 + req.dcReturnRate));
+            // 受取開始前のDCも運用を継続する
             if (dcAnnuityStarted) {
                 dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity * (1 + req.dcReturnRate));
+            } else {
+                dc = Math.max(0, dc * (1 + req.dcReturnRate));
             }
 
-            double total = nisa + other;
-
-            if (dcAnnuityStarted) {
-                total += dcRemainingForAnnuity;
-            }
+            double total = nisa + other + (dcAnnuityStarted ? dcRemainingForAnnuity : dc);
 
             if (total == 0 && depletionAge == null) {
                 depletionAge = age;
@@ -303,12 +302,11 @@ public class SimulationService {
                 other = Math.max(0, other * (1 + randomReturn));
                 if (dcAnnuityStarted) {
                     dcRemainingForAnnuity = Math.max(0, dcRemainingForAnnuity * (1 + req.dcReturnRate));
+                } else {
+                    dc = Math.max(0, dc * (1 + req.dcReturnRate));
                 }
 
-                double total = nisa + other;
-                if (dcAnnuityStarted) {
-                    total += dcRemainingForAnnuity;
-                }
+                double total = nisa + other + (dcAnnuityStarted ? dcRemainingForAnnuity : dc);
 
                 if (total <= 0) {
                     failureCount++;

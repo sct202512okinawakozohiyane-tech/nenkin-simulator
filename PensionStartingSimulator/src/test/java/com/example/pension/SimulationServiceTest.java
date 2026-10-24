@@ -54,7 +54,7 @@ class SimulationServiceTest {
         SimulationRequest req = new SimulationRequest();
 
         // 年齢系（制約: startAge < lifeExpectancy, retirement/pensionStart >= startAge）
-        int startAge       = 40 + rng.nextInt(41);            // 40〜80
+        int startAge       = 60 + rng.nextInt(21);            // 60〜80
         // lifeExpectancy: startAge+1〜110
         int lifeExpectancy = startAge + 1 + rng.nextInt(Math.max(1, 110 - startAge));
         // retirementAge: startAge〜min(80, lifeExpectancy)
@@ -130,6 +130,22 @@ class SimulationServiceTest {
             .filter(yr -> yr.age == 60).findFirst()
             .orElseThrow(() -> new AssertionError("60歳のデータが見つからない"));
         assertTrue(at60.dcBalance < initialDc, "60歳でDCが取り崩されていない: " + at60.dcBalance);
+    }
+
+    /** DC受取開始を65歳に遅らせた場合、受取前のDCも合計残高に含まれ、運用が続くことを確認 */
+    @Test
+    void testDeferredDcCountsInTotalAndGrows() {
+        SimulationRequest req = baseReq(60);
+        req.dcStartAge   = 65;
+        req.dcReturnRate = 0.03;
+        SimulationResponse resp = service.simulate(req);
+
+        YearResult at60 = resp.yearlyResults.get(0);
+        YearResult at61 = resp.yearlyResults.get(1);
+        assertEquals(at60.dcBalance, at60.totalBalance, "受取前のDCが合計残高に含まれていない");
+        assertTrue(at61.dcBalance > at60.dcBalance, "受取前のDCに運用利回りが反映されていない");
+        assertTrue(resp.assetDepletionAge == -1 || resp.assetDepletionAge > 65,
+            "DC残高があるのに資産寿命が " + resp.assetDepletionAge + " 歳と判定された");
     }
 
     /** startAge=60 のとき 60歳から取り崩されることを確認 */

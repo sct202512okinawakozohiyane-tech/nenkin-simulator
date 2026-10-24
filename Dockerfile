@@ -20,8 +20,13 @@ RUN ./gradlew bootJar --no-daemon -x test
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
+# root ではなく専用ユーザーで実行する
+RUN addgroup -S app && adduser -S -G app app
+
 # ビルド成果物のみコピー
 COPY --from=build /app/build/libs/*.jar app.jar
+
+USER app
 
 # Render が自動的に PORT 環境変数を設定する
 EXPOSE 8080
